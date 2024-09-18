@@ -1,0 +1,10 @@
+[package]
+name = "openAI_sencit_test"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+dotenvy = "0.15.7"
+openai = "1.0.0-alpha.16"
+rusqlite = "0.32.1"
+tokio = { version = "1.40.0", features = ["rt", "rt-multi-thread", "macros"] }

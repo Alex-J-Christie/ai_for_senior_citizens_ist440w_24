@@ -1,0 +1,10 @@
+/home/alexc/Documents/School/Fall_2024/IST440W/Project/ai_for_senior_citizens_ist440w_24/test/openAI_sencit_test/target/debug/deps/libunicase-857ac4167a37d388.rmeta: /home/alexc/.cargo/registry/src/index.crates.io-6f17d22bba15001f/unicase-2.7.0/src/lib.rs /home/alexc/.cargo/registry/src/index.crates.io-6f17d22bba15001f/unicase-2.7.0/src/ascii.rs /home/alexc/.cargo/registry/src/index.crates.io-6f17d22bba15001f/unicase-2.7.0/src/unicode/mod.rs /home/alexc/.cargo/registry/src/index.crates.io-6f17d22bba15001f/unicase-2.7.0/src/unicode/map.rs
+
+/home/alexc/Documents/School/Fall_2024/IST440W/Project/ai_for_senior_citizens_ist440w_24/test/openAI_sencit_test/target/debug/deps/libunicase-857ac4167a37d388.rlib: /home/alexc/.cargo/registry/src/index.crates.io-6f17d22bba15001f/unicase-2.7.0/src/lib.rs /home/alexc/.cargo/registry/src/index.crates.io-6f17d22bba15001f/unicase-2.7.0/src/ascii.rs /home/alexc/.cargo/registry/src/index.crates.io-6f17d22bba15001f/unicase-2.7.0/src/unicode/mod.rs /home/alexc/.cargo/registry/src/index.crates.io-6f17d22bba15001f/unicase-2.7.0/src/unicode/map.rs
+
+/home/alexc/Documents/School/Fall_2024/IST440W/Project/ai_for_senior_citizens_ist440w_24/test/openAI_sencit_test/target/debug/deps/unicase-857ac4167a37d388.d: /home/alexc/.cargo/registry/src/index.crates.io-6f17d22bba15001f/unicase-2.7.0/src/lib.rs /home/alexc/.cargo/registry/src/index.crates.io-6f17d22bba15001f/unicase-2.7.0/src/ascii.rs /home/alexc/.cargo/registry/src/index.crates.io-6f17d22bba15001f/unicase-2.7.0/src/unicode/mod.rs /home/alexc/.cargo/registry/src/index.crates.io-6f17d22bba15001f/unicase-2.7.0/src/unicode/map.rs
+
+/home/alexc/.cargo/registry/src/index.crates.io-6f17d22bba15001f/unicase-2.7.0/src/lib.rs:
+/home/alexc/.cargo/registry/src/index.crates.io-6f17d22bba15001f/unicase-2.7.0/src/ascii.rs:
+/home/alexc/.cargo/registry/src/index.crates.io-6f17d22bba15001f/unicase-2.7.0/src/unicode/mod.rs:
+/home/alexc/.cargo/registry/src/index.crates.io-6f17d22bba15001f/unicase-2.7.0/src/unicode/map.rs:
