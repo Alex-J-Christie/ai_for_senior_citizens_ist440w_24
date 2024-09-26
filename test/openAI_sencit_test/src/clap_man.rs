@@ -1,9 +1,10 @@
     use clap::{Arg, arg, ArgMatches, command};
-    use crate::chat::{initiate_chat, test};
+    use crate::chat::initiate_chat;
+    use crate::db_man::test;
 
     pub fn run_args(args: ArgMatches) {
-        if let Some(_a) = args.get_one::<String>("sign_in") {
-            initiate_chat(String::from("test"));
+        if let Some(a) = args.get_one::<String>("sign_in") {
+            initiate_chat(a);
         }
         if let Some(_b) = args.get_one::<bool>("test") {
             test();
