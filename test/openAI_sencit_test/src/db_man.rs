@@ -34,7 +34,6 @@ fn check_base_tables() {
 
 fn add_user(user_name: &String) {
     check_base_tables();
-
     instance_conn().execute("insert or ignore into Users (User_Name) values(?1)",
                             params![user_name])
         .expect("**failed to add new user in add_user()**\n");

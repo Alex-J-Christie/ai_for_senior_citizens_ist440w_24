@@ -9,19 +9,55 @@ use openai::{set_base_url, set_key};
 use openai::chat::{ChatCompletion, ChatCompletionMessage, ChatCompletionMessageRole};
 use crate::db_man;
 
-#[tokio::main]
-pub async fn initiate_chat(user: &String) {
+
+pub fn create_bot(user: &String) -> Vec<ChatCompletionMessage> {
     dotenv().unwrap();
     set_key(env::var("OPENAI_KEY").unwrap());
     set_base_url(env::var("OPENAI_BASE_URL").unwrap_or_default());
-
-    let mut messages = vec![ChatCompletionMessage {
+    let messages: Vec<ChatCompletionMessage> = vec![ChatCompletionMessage {
         role: ChatCompletionMessageRole::System,
         content: Some(get_prompt(&user)),
         name: None,
         function_call: None,
     }];
+    messages
+}
 
+pub async fn get_bot_response(messages: &mut Vec<ChatCompletionMessage>, user_message_content: String, user: &String) -> String {
+    messages.push(ChatCompletionMessage {
+        role: ChatCompletionMessageRole::User,
+        content: Some(user_message_content),
+        name: None,
+        function_call: None,//pipe function in to pass content results into database for persistence. Consider parsing manually to save space.
+    });
+
+    let chat_completion:  ChatCompletion = ChatCompletion::builder("gpt-4o-mini", messages.clone())
+        .create()
+        .await
+        .unwrap();
+    let returned_message: ChatCompletionMessage = chat_completion.choices.first().unwrap().message.clone();
+
+    let mut admin_answer: String = returned_message
+        .content
+        .clone()
+        .unwrap();
+    let user_answer: String = admin_answer
+        .split_off(admin_answer.find("Reply to User: ")
+        .unwrap());
+
+    add_prompt_user_info(user.clone(), &admin_answer[16..]);
+    messages.push(returned_message);
+    Command::new("espeak-ng")
+        .arg(&user_answer[15..])
+        .spawn()
+        .expect("espeak-ng command failed or is not present");
+
+    user_answer
+}
+
+#[tokio::main]
+pub async fn initiate_chat(user: &String) {
+    let mut messages: Vec<ChatCompletionMessage> = create_bot(&user);
     loop {
         print!("{}: ", user);
         stdout().flush().unwrap();
@@ -29,37 +65,13 @@ pub async fn initiate_chat(user: &String) {
         let mut user_message_content: String = String::new();
 
         stdin().read_line(&mut user_message_content).unwrap();
-        messages.push(ChatCompletionMessage {
-            role: ChatCompletionMessageRole::User,
-            content: Some(user_message_content),
-            name: None,
-            function_call: None,//pipe function in to pass content results into database for persistence. Consider parsing manually to save space.
-        });
-
-        let chat_completion:  ChatCompletion = ChatCompletion::builder("gpt-4o-mini", messages.clone())
-            .create()
-            .await
-            .unwrap();
-        let returned_message: ChatCompletionMessage = chat_completion.choices.first().unwrap().message.clone();
-
-        let mut admin_answer: String = returned_message.content.clone().unwrap();
-        let user_answer:      String = admin_answer.split_off(admin_answer.find("Reply to User: ").unwrap());
-        // println!("{:?}", &admin_answer[16..]);
-        // println!("{:?}", &user_answer[15..]);
-
-        add_prompt_user_info(user.clone(), &admin_answer[16..]);
+        let chat_results: String = get_bot_response(&mut messages, user_message_content, user).await;
 
         println!(
-            "{:#?}: {}",
-            &returned_message.role,
-            &user_answer[15..],
+            "{}: {}",
+            "Assistant",
+            &chat_results[15..],
         );
 
-        Command::new("espeak-ng")
-            .arg(&user_answer[15..])
-            .spawn()
-            .expect("espeak-ng command failed or is not present");
-
-        messages.push(returned_message);
     }
 }
