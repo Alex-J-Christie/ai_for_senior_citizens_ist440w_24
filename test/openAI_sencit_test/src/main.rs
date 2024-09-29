@@ -2,8 +2,8 @@ mod clap_man;
 mod chat;
 mod db_man;
 mod gui_view;
-
 use crate::clap_man as com;
+
 
 
 fn main() {

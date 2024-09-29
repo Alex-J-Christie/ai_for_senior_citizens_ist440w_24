@@ -1,13 +1,41 @@
 //db
 use db_man::{get_prompt, add_prompt_user_info};
-//chat
 use std::env;
+use std::fmt::Formatter;
 use dotenvy::dotenv;
 use std::process::Command;
 use std::io::{stdin, stdout, Write};
 use openai::{set_base_url, set_key};
 use openai::chat::{ChatCompletion, ChatCompletionMessage, ChatCompletionMessageRole};
 use crate::db_man;
+use std::fmt::Display;
+#[derive(Clone, Debug, PartialEq)]
+pub enum Voices {
+    Sam,
+    Us1,
+    Us2,
+    Us3
+}
+
+impl Voices {
+    pub const ALL: &'static [Self] = &[
+        Self::Sam,
+        Self::Us1,
+        Self::Us2,
+        Self::Us3
+    ];
+}
+
+impl Display for Voices {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Voices::Sam => write!(f, "Sam Variant"),
+            Voices::Us1 => write!(f, "Us1 Variant"),
+            Voices::Us2 => write!(f, "Us2 Variant"),
+            Voices::Us3 => write!(f, "Us3 Variant"),
+        }
+    }
+}
 
 
 pub fn create_bot(user: &String) -> Vec<ChatCompletionMessage> {
@@ -23,7 +51,8 @@ pub fn create_bot(user: &String) -> Vec<ChatCompletionMessage> {
     messages
 }
 
-pub async fn get_bot_response(messages: &mut Vec<ChatCompletionMessage>, user_message_content: String, user: &String) -> String {
+pub async fn get_bot_response(messages: &mut Vec<ChatCompletionMessage>, user_message_content: String, user: &String, voice: Voices) -> String {
+    let mut voice_choice: String = String::from("");
     messages.push(ChatCompletionMessage {
         role: ChatCompletionMessageRole::User,
         content: Some(user_message_content),
@@ -46,9 +75,18 @@ pub async fn get_bot_response(messages: &mut Vec<ChatCompletionMessage>, user_me
         .unwrap());
 
     add_prompt_user_info(user.clone(), &admin_answer[16..]);
+
+    match voice {
+        Voices::Us1 => voice_choice = String::from("mb-us1"),
+        Voices::Us2 => voice_choice = String::from("mb-us2"),
+        Voices::Us3 => voice_choice = String::from("mb-us3"),
+        _ => {}
+    }
     messages.push(returned_message);
     Command::new("espeak-ng")
         .arg(&user_answer[15..])
+        .arg("-v")
+        .arg(voice_choice)
         .spawn()
         .expect("espeak-ng command failed or is not present");
 
@@ -65,7 +103,7 @@ pub async fn initiate_chat(user: &String) {
         let mut user_message_content: String = String::new();
 
         stdin().read_line(&mut user_message_content).unwrap();
-        let chat_results: String = get_bot_response(&mut messages, user_message_content, user).await;
+        let chat_results: String = get_bot_response(&mut messages, user_message_content, user, Voices::Sam).await;
 
         println!(
             "{}: {}",
