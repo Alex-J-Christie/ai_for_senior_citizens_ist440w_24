@@ -61,7 +61,7 @@ pub fn get_prompt(user_name: &String) -> String {
     while let Some(row) = rows.next().unwrap() {
         user_info.push(row.get(0).unwrap());
     }
-    user_info.get(0).unwrap().to_string()
+    user_info.first().unwrap().to_string()
 }
 pub fn add_prompt_user_info(user_name: String, new_info: &str) {
     check_base_tables();
@@ -87,7 +87,7 @@ pub fn test(){
     println!("get prompts results: {:?}", get_prompt(&String::from("Adams")));
 
     println!("\nTest 4: added prompt info test");
-    add_prompt_user_info(String::from("Adams"), &*String::from("Info: Her grandkids are named James and Charles"));
+    add_prompt_user_info(String::from("Adams"), &String::from("Info: Her grandkids are named James and Charles"));
     println!("get prompts results: {:?}", get_prompt(&String::from("Adams")));
 
 }

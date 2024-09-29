@@ -6,6 +6,7 @@ use iced::alignment::Vertical;
 use iced::font::Family;
 use iced::widget::{container, pick_list, scrollable, text, text_input, Column, Container, Image, Row, Scrollable, Slider, TextInput};
 use iced::{Fill, FillPortion, Font, Pixels, Size, Task, Theme};
+
 //standards and openai
 use std::fmt::{Display, Formatter};
 use openai::chat::ChatCompletionMessage;
@@ -55,7 +56,7 @@ impl Default for Chat {
             logs: vec![],
             theme: Theme::GruvboxDark,
             voice: Voices::Sam,
-            text_size: Pixels { 0: 16.0 },
+            text_size: Pixels(16.0),
             text_font: Serif,
             text_family: Family::SansSerif,
         }
@@ -84,7 +85,7 @@ impl Chat {
 
         let text_size_slider: Column<'_, Message> = Column::new()
             .push(text(format!("Set Font Size: {}", self.text_size.0)))
-            .push(Slider::new(8..=32, self.text_size.0 as u16, |value| Message::TextSizeChanged(Pixels { 0: value as f32 })))
+            .push(Slider::new(8..=32, self.text_size.0 as u16, |value| Message::TextSizeChanged(Pixels(value as f32 ))))
                 .width(Fill)
                 .padding(20);
 
@@ -98,8 +99,7 @@ impl Chat {
             Column::new().push(icon).push(theme_list).push(voice_list).push(text_size_slider).push(fonts_list))
                 .center_x(50)
                 .height(Fill)
-                .width(FillPortion(20))
-                .into();
+                .width(FillPortion(20));
 
         let in_field: TextInput<'_, Message> = match &self.user {
             Some(_) => {
@@ -146,22 +146,19 @@ impl Chat {
 
         let in_out_field: Column<'_, Message> = Column::new()
                 .push(out_field)
-                .push(in_field)
-                .into();
+                .push(in_field);
 
         let main_area: Container<'_, Message> = container(in_out_field)
                 .height(Fill)
                 .width(FillPortion(80))
                 .align_y(Vertical::Bottom)
                 .style(container::rounded_box)
-                .padding(20)
-                .into();
+                .padding(20);
 
         let area: Row<'_, Message> = Row::new()
                 .push(side_bar)
                 .push(main_area)
-                .padding(20)
-                .into();
+                .padding(20);
 
         area
     }
@@ -257,15 +254,16 @@ impl Fonts {
             Monospace => "Monospace".to_string(),
         }
     }
-    pub fn convert_to_font(&self) -> Font {
-        match self {
-            Serif => Font::with_name("Serif"),
-            // SansSerif => Font::with_name("SansSerif"),
-            // Cursive => Font::with_name("Cursive"),
-            // Fantasy => Font::with_name("Fantasy"),
-            Monospace => Font::with_name("Monospace"),
-        }
-    }
+    // #[warn(dead_code)]
+    // pub fn convert_to_font(&self) -> Font {
+    //     match self {
+    //         Serif => Font::with_name("Serif"),
+    //         // SansSerif => Font::with_name("SansSerif"),
+    //         // Cursive => Font::with_name("Cursive"),
+    //         // Fantasy => Font::with_name("Fantasy"),
+    //         Monospace => Font::with_name("Monospace"),
+    //     }
+    // }
 
     pub fn convert_to_family(&self) -> Family {
 
