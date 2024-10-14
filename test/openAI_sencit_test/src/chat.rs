@@ -64,8 +64,8 @@ pub async fn get_bot_response(messages: &mut Vec<ChatCompletionMessage>, user_me
         .create()
         .await
         .unwrap();
-    let returned_message: ChatCompletionMessage = chat_completion.choices.first().unwrap().message.clone();
 
+    let returned_message: ChatCompletionMessage = chat_completion.choices.first().unwrap().message.clone();
     let mut admin_answer: String = returned_message
         .content
         .clone()
@@ -75,6 +75,7 @@ pub async fn get_bot_response(messages: &mut Vec<ChatCompletionMessage>, user_me
         .unwrap());
 
     add_prompt_user_info(user.to_owned(), &admin_answer[16..]);
+    messages.push(returned_message);
 
     match voice {
         Voices::Us1 => voice_choice = String::from("mb-us1"),
@@ -82,7 +83,7 @@ pub async fn get_bot_response(messages: &mut Vec<ChatCompletionMessage>, user_me
         Voices::Us3 => voice_choice = String::from("mb-us3"),
         _ => {}
     }
-    messages.push(returned_message);
+
     Command::new("espeak-ng")
         .arg(&user_answer[15..])
         .arg("-v")

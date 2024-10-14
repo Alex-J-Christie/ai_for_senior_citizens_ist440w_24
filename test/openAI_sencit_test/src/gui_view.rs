@@ -1,16 +1,17 @@
 use crate::chat;
-use chat::{create_bot, get_bot_response};
 //chat.rs methods
 use chat::Voices;
+use chat::{create_bot, get_bot_response};
 use iced::alignment::Vertical;
 use iced::font::Family;
-use iced::widget::{container, pick_list, scrollable, text, text_input, Column, Container, Image, Row, Scrollable, Slider, TextInput};
-use iced::{Fill, FillPortion, Font, Pixels, Size, Task, Theme};
+use iced::widget::{container, pick_list, scrollable, text, text_input, Column, Container, Image, Row, Scrollable, Slider, Text, TextInput};
+use iced::{Fill, FillPortion, Font, Pixels, Renderer, Size, Task, Theme};
 
+use crate::gui_view::Fonts::{Monospace, Serif};
+use openai::chat::ChatCompletionMessage;
 //standards and openai
 use std::fmt::{Display, Formatter};
-use openai::chat::ChatCompletionMessage;
-use crate::gui_view::Fonts::{Monospace, Serif};
+use iced::widget::container::Style;
 
 pub fn main() -> iced::Result {
     iced::application(Chat::title, Chat::update, Chat::view)
@@ -119,17 +120,17 @@ impl Chat {
         };
 
         let scrollable_content: Column<'_, Message> = Column::new()
-            .push(text("Welcome to Your AI Companion! Enter Your Name to Chat!")
-                 .size(Pixels::from(self.text_size.0))
-                 .font(Font {
-                     family: self.text_family,
-                     weight: Default::default(),
-                     stretch: Default::default(),
-                     style: Default::default(),
-                 }) //self.text_font.convert_to_font()
-                 ).padding(20)
-                 .spacing(5)
-            .push(Column::from_iter(self.logs.iter().map(|value| text(value)
+            .push(border_background(self.theme.clone(), text("Welcome to Your AI Companion! Enter Your Name to Chat!")
+                                        .size(Pixels::from(self.text_size.0))
+                                        .font(Font {
+                                            family: self.text_family,
+                                            weight: Default::default(),
+                                            stretch: Default::default(),
+                                            style: Default::default(),
+                                        })))
+                                        //self.text_font.convert_to_font())) //self.text_font.convert_to_font())).padding(20)
+            .push(Column::from_iter(self.logs.iter().map(|value|
+                  text(value)
                  .size(Pixels::from(self.text_size.0))
                  .font(Font {
                      family: self.text_family,
@@ -228,8 +229,29 @@ impl Chat {
     fn theme(&self) -> Theme {
         self.theme.clone()
     }
+
+
+
 }
 
+//iced widget helpers
+fn border_background(theme: Theme, text_input: Text<Theme, Renderer>) -> Container<Message> {
+
+    let bubble_style: Style = Style {
+        text_color: Option::from(theme.palette().text),
+        background: None,
+        border: Default::default(),
+        shadow: Default::default(),
+    };
+
+    container(text_input)
+        .padding(10)
+        .center_x(800)
+        .style(container::bordered_box)
+        .into()
+}
+
+//temp space for fonts
 #[derive(Debug, Clone, PartialEq)]
 enum Fonts {
     Serif,

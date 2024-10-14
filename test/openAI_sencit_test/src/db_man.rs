@@ -1,13 +1,21 @@
+use std::env;
 use rusqlite::{Connection, params, Rows, Statement};
 use std::path::{PathBuf};
 use directories::UserDirs;
 
 fn instance_conn() -> Connection {
     let path_source: UserDirs = UserDirs::new().expect("Could not find Docs");
-    let mut path = PathBuf::from(path_source.document_dir()
-        .unwrap()
-        .to_str()
-        .unwrap().to_owned() + "/openAI_sencit_test");
+    let mut path = match env::consts::OS {
+        "windows" => PathBuf::from(path_source.document_dir()
+            .unwrap()
+            .to_str()
+            .unwrap().to_owned() + r"\openAI_sencit_test"),
+        _ => PathBuf::from(path_source.document_dir()
+            .unwrap()
+            .to_str()
+            .unwrap().to_owned() + "/openAI_sencit_test")
+    };
+
     if !path.exists() {
         std::fs::create_dir(&path).expect("No write Access");
     }
