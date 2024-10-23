@@ -4,14 +4,17 @@ use chat::Voices;
 use chat::{create_bot, get_bot_response};
 use iced::alignment::Vertical;
 use iced::font::Family;
-use iced::widget::{container, pick_list, scrollable, text, text_input, Column, Container, Image, Row, Scrollable, Slider, Text, TextInput};
-use iced::{Fill, FillPortion, Font, Pixels, Renderer, Size, Task, Theme};
-
+use iced::widget::{button, container, pick_list, scrollable, text, text_input,
+                   vertical_space, Column, Container, Image, Row, Scrollable,
+                   Slider, Text, TextInput};
+use iced::{border, Color, Fill, FillPortion, Font, Pixels, Renderer, Size, Task, Theme};
 use crate::gui_view::Fonts::{Monospace, Serif};
+use iced::widget::container::Style;
+use iced::widget::scrollable::{Rail, Scroller};
 use openai::chat::ChatCompletionMessage;
 //standards and openai
 use std::fmt::{Display, Formatter};
-use iced::widget::container::Style;
+use crate::chat::bot_voice;
 
 pub fn main() -> iced::Result {
     iced::application(Chat::title, Chat::update, Chat::view)
@@ -32,6 +35,7 @@ struct Chat {
     text_size: Pixels,
     text_font: Fonts,
     text_family: Family,
+    side_bar: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -45,6 +49,8 @@ enum Message {
     TextSizeChanged(Pixels),
     TextFontChanged(Fonts),
     BotResponse(String),
+    BotVoice,
+    SideBarChanged,
 }
 
 impl Default for Chat {
@@ -56,10 +62,11 @@ impl Default for Chat {
             content: "".to_string(),
             logs: vec![],
             theme: Theme::GruvboxDark,
-            voice: Voices::Sam,
+            voice: Voices::Alloy,
             text_size: Pixels(16.0),
             text_font: Serif,
             text_family: Family::SansSerif,
+            side_bar: true,
         }
     }
 }
@@ -70,37 +77,7 @@ impl Chat {
     }
     fn view(&self) -> Row<'_, Message> {
 
-        let icon: Image = Image::new("icon.png");
-
-        let theme_list: Column<'_, Message> = Column::new()
-            .push(text("Choose Theme"))
-            .push(pick_list(Theme::ALL, Some(&self.theme), Message::ThemeChanged)
-                .width(Fill))
-                .padding(20);
-
-        let voice_list: Column<'_, Message> = Column::new()
-            .push(text("Choose a Voice"))
-            .push(pick_list(Voices::ALL, Some(&self.voice), Message::VoiceChanged))
-                .width(Fill)
-                .padding(20);
-
-        let text_size_slider: Column<'_, Message> = Column::new()
-            .push(text(format!("Set Font Size: {}", self.text_size.0)))
-            .push(Slider::new(8..=32, self.text_size.0 as u16, |value| Message::TextSizeChanged(Pixels(value as f32 ))))
-                .width(Fill)
-                .padding(20);
-
-        let fonts_list: Column<'_, Message> = Column::new()
-            .push(text("Set Font Type:"))
-            .push(pick_list(Fonts::ALL, Some(&self.text_font), Message::TextFontChanged))
-                .width(Fill)
-                .padding(20);
-
-        let side_bar: Container<'_, Message> = container(
-            Column::new().push(icon).push(theme_list).push(voice_list).push(text_size_slider).push(fonts_list))
-                .center_x(50)
-                .height(Fill)
-                .width(FillPortion(20));
+        let side_bar: Container<'_, Message> = self.side_bar();
 
         let in_field: TextInput<'_, Message> = match &self.user {
             Some(_) => {
@@ -120,7 +97,7 @@ impl Chat {
         };
 
         let scrollable_content: Column<'_, Message> = Column::new()
-            .push(border_background(self.theme.clone(), text("Welcome to Your AI Companion! Enter Your Name to Chat!")
+            .push(border_background(-1, text("Welcome to Your AI Companion! Enter Your Name to Chat!")
                                         .size(Pixels::from(self.text_size.0))
                                         .font(Font {
                                             family: self.text_family,
@@ -128,9 +105,8 @@ impl Chat {
                                             stretch: Default::default(),
                                             style: Default::default(),
                                         })))
-                                        //self.text_font.convert_to_font())) //self.text_font.convert_to_font())).padding(20)
-            .push(Column::from_iter(self.logs.iter().map(|value|
-                  text(value)
+            .push(Column::from_iter(self.logs.iter().enumerate().map(|(pos, value)|
+                  border_background(pos as i32, text(value)
                  .size(Pixels::from(self.text_size.0))
                  .font(Font {
                      family: self.text_family,
@@ -138,12 +114,33 @@ impl Chat {
                      stretch: Default::default(),
                      style: Default::default(),
                  })
-                 .into()
+                ).into()
             )));
 
         let out_field: Scrollable<'_, Message> = scrollable(scrollable_content)
                 .width(Fill)
-                .height(Fill);
+                .height(Fill)
+                .style(move |_theme: &Theme, _status| {
+                    let rail: Rail = Rail {
+                        background: None,
+                        border: Default::default(),
+                        scroller: Scroller {
+                            color: Color::TRANSPARENT,
+                            border: Default::default()
+                        },
+                    };
+                    scrollable::Style {
+                        container: Default::default(),
+                        vertical_rail: Rail {
+                            background: None,
+                            border: Default::default(),
+                            scroller: Scroller { color: Default::default(), border: Default::default() },
+                        },
+                        horizontal_rail: rail,
+                        gap: None,
+                    }
+                })
+                .anchor_bottom();
 
         let in_out_field: Column<'_, Message> = Column::new()
                 .push(out_field)
@@ -175,10 +172,10 @@ impl Chat {
                     let user_text: String = self.user_text.clone();
                     let content: String = self.content.clone();
                     let bot: Vec<ChatCompletionMessage> = self.bot.clone();
-                    let voice: Voices = self.voice.clone();
+                    self.content.clear();
 
                     return Task::perform(async move {
-                        Self::fetch_bot_response(bot, content, user_text, voice)
+                        Self::fetch_bot_response(bot, content, user_text)
                     }, |response| {
                         Message::BotResponse(response)
                     });
@@ -203,8 +200,13 @@ impl Chat {
             Message::BotResponse(response) => {
                 let print_line: String = response.to_string()[15..].parse().unwrap();
                 self.logs.push(format!("Assistant: {}\n", print_line));
+                let voice: Voices = self.voice.clone();
                 self.content.clear();
-                Task::none()
+                Task::perform(async move {
+                    Self::play_bot_voice(print_line, voice)
+                }, |()| {
+                    Message::BotVoice
+                })
             }
             Message::VoiceChanged(voice) => {
                 self.voice = voice;
@@ -219,36 +221,137 @@ impl Chat {
                 self.text_family = font.convert_to_family();
                 Task::none()
             }
+            Message::SideBarChanged => {
+                self.side_bar = !(self.side_bar);
+                Task::none()
+            }
+            Message::BotVoice => {
+                Task::none()
+            }
         }
     }
     #[tokio::main]
-    async fn fetch_bot_response(mut bot: Vec<ChatCompletionMessage>, content: String, user_text: String, voice: Voices) -> String {
-        get_bot_response(&mut bot, content, &user_text, voice)
-            .await
+    async fn fetch_bot_response(mut bot: Vec<ChatCompletionMessage>, content: String, user_text: String) -> String {
+        get_bot_response(&mut bot, content.clone(), &user_text).await
+    }
+    #[tokio::main]
+    async fn play_bot_voice(input_text: String, voice: Voices) {
+        bot_voice(input_text, voice).await
     }
     fn theme(&self) -> Theme {
         self.theme.clone()
     }
+    fn side_bar(&self) -> Container<'_, Message> {
+        let icon: Image = Image::new("icon.png");
 
+        let bar_button = button(text('≡'))
+            .on_press(Message::SideBarChanged)
+            .padding(10);
 
+        let theme_list: Column<'_, Message> = Column::new()
+            .push(text("Choose Theme"))
+            .push(pick_list(Theme::ALL, Some(&self.theme), Message::ThemeChanged)
+                .width(Fill))
+            .padding(20);
 
+        let voice_list: Column<'_, Message> = Column::new()
+            .push(text("Choose a Voice"))
+            .push(pick_list(Voices::ALL, Some(&self.voice), Message::VoiceChanged))
+            .width(Fill)
+            .padding(20);
+
+        let text_size_slider: Column<'_, Message> = Column::new()
+            .push(text(format!("Set Font Size: {}", self.text_size.0)))
+            .push(Slider::new(8..=32, self.text_size.0 as u16, |value| Message::TextSizeChanged(Pixels(value as f32 ))))
+            .width(Fill)
+            .padding(20);
+
+        let fonts_list: Column<'_, Message> = Column::new()
+            .push(text("Set Font Type:"))
+            .push(pick_list(Fonts::ALL, Some(&self.text_font), Message::TextFontChanged))
+            .width(Fill)
+            .padding(20);
+
+        let side_bar: Container<'_, Message> = match self.side_bar {
+            true => {
+                container(
+                    Column::new()
+                        .push(icon)
+                        .push(
+                            Column::new()
+                                .push(vertical_space())
+                                .push(bar_button)
+                        )
+                )
+                    .center_x(50)
+                    .height(Fill)
+                    .width(FillPortion(5))
+            }
+            false => {
+                container(
+                    Column::new()
+                        .push(icon)
+                        .push(theme_list)
+                        .push(voice_list)
+                        .push(text_size_slider)
+                        .push(fonts_list)
+                        .push(
+                            Column::new()
+                                .push(vertical_space())
+                                .push(bar_button)
+                        )
+                )
+                    .center_x(50)
+                    .height(Fill)
+                    .width(FillPortion(20))
+            }
+        };
+
+        side_bar
+    }
 }
 
 //iced widget helpers
-fn border_background(theme: Theme, text_input: Text<Theme, Renderer>) -> Container<Message> {
+fn border_background(pos: i32, text_input: Text<Theme, Renderer>) -> Container<Message> {
+    let user_assignment: bool = pos % 2 == 0;
+    match pos {
+        -1 => {
+            container(text_input)
+                .padding(10)
+                .center_x(800)
+                .width(Fill)
+                .style(container::bordered_box)
+                .into()
+        }
+        _ => {
+            let bubble = container(text_input)
+                .style(move |theme: &Theme| {
+                    let palette = theme.extended_palette();
+                    let (background, radius) =
+                        match user_assignment {
+                            true => (palette.background.base, border::radius(20).top_left(0)),
+                            false => (palette.background.strong, border::radius(20).top_right(0))
+                        };
+                    Style {
+                        background: Some(background.color.into()),
+                        text_color: Some(background.text),
+                        border: border::rounded(radius),
+                        ..Style::default()
+                    }
+                }
+                )
+                .padding(10);
+            match user_assignment {
+                true => {container(bubble)
+                    .padding(10)
+                    .align_left(Fill)}
+                false => {container(bubble)
+                    .padding(10)
+                    .align_right(Fill)}
+            }
 
-    let bubble_style: Style = Style {
-        text_color: Option::from(theme.palette().text),
-        background: None,
-        border: Default::default(),
-        shadow: Default::default(),
-    };
-
-    container(text_input)
-        .padding(10)
-        .center_x(800)
-        .style(container::bordered_box)
-        .into()
+        }
+    }
 }
 
 //temp space for fonts
@@ -257,11 +360,11 @@ enum Fonts {
     Serif,
     Monospace,
 }
-    impl Display for Fonts {
-        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+impl Display for Fonts {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
             write!(f, "{}", self.family_to_string())
-        }
     }
+}
 impl Fonts {
     pub const ALL: [Fonts; 2] = [
         Serif,

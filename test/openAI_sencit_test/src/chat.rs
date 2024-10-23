@@ -1,42 +1,49 @@
-//db
-use db_man::{get_prompt, add_prompt_user_info};
-use std::env;
-use std::fmt::Formatter;
-use dotenvy::dotenv;
-use std::process::Command;
-use std::io::{stdin, stdout, Write};
-use openai::{set_base_url, set_key};
-use openai::chat::{ChatCompletion, ChatCompletionMessage, ChatCompletionMessageRole};
 use crate::db_man;
+use crate::sttttts::generate_audio;
+//db
+use db_man::{add_prompt_user_info, get_prompt};
+use dotenvy::dotenv;
+use openai::chat::{ChatCompletion, ChatCompletionMessage, ChatCompletionMessageRole};
+use openai::{set_base_url, set_key};
+use std::env;
 use std::fmt::Display;
+use std::fmt::Formatter;
+use std::io::{stdin, stdout, Write};
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum Voices {
-    Sam,
-    Us1,
-    Us2,
-    Us3
+    Alloy,
+    Echo,
+    Fable,
+    Onyx,
+    Nova,
+    Shimmer
 }
 
 impl Voices {
     pub const ALL: &'static [Self] = &[
-        Self::Sam,
-        Self::Us1,
-        Self::Us2,
-        Self::Us3
+        Self::Alloy,
+        Self::Echo,
+        Self::Fable,
+        Self::Onyx,
+        Self::Nova,
+        Self::Shimmer,
     ];
 }
 
 impl Display for Voices {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Voices::Sam => write!(f, "Sam Variant"),
-            Voices::Us1 => write!(f, "Us1 Variant"),
-            Voices::Us2 => write!(f, "Us2 Variant"),
-            Voices::Us3 => write!(f, "Us3 Variant"),
+            Voices::Alloy => write!(f, "Alloy"),
+            Voices::Echo => write!(f, "Echo"),
+            Voices::Fable => write!(f, "Fable"),
+            Voices::Onyx => write!(f, "Onyx"),
+            Voices::Nova => write!(f, "Nova"),
+            Voices::Shimmer => write!(f, "Shimmer"),
+
         }
     }
 }
-
 
 pub fn create_bot(user: &String) -> Vec<ChatCompletionMessage> {
     dotenv().unwrap();
@@ -51,8 +58,7 @@ pub fn create_bot(user: &String) -> Vec<ChatCompletionMessage> {
     messages
 }
 
-pub async fn get_bot_response(messages: &mut Vec<ChatCompletionMessage>, user_message_content: String, user: &str, voice: Voices) -> String {
-    let mut voice_choice: String = String::from("");
+pub async fn get_bot_response(messages: &mut Vec<ChatCompletionMessage>, user_message_content: String, user: &str) -> String {
     messages.push(ChatCompletionMessage {
         role: ChatCompletionMessageRole::User,
         content: Some(user_message_content),
@@ -77,21 +83,20 @@ pub async fn get_bot_response(messages: &mut Vec<ChatCompletionMessage>, user_me
     add_prompt_user_info(user.to_owned(), &admin_answer[16..]);
     messages.push(returned_message);
 
-    match voice {
-        Voices::Us1 => voice_choice = String::from("mb-us1"),
-        Voices::Us2 => voice_choice = String::from("mb-us2"),
-        Voices::Us3 => voice_choice = String::from("mb-us3"),
-        _ => {}
-    }
-
-    Command::new("espeak-ng")
-        .arg(&user_answer[15..])
-        .arg("-v")
-        .arg(voice_choice)
-        .spawn()
-        .expect("espeak-ng command failed or is not present");
-
     user_answer
+}
+
+pub async fn bot_voice(voice_line: String, voice: Voices) {
+    let voice_choice: String = match voice {
+        Voices::Alloy => String::from("alloy"),
+        Voices::Echo => String::from("echo"),
+        Voices::Fable => String::from("fable"),
+        Voices::Onyx => String::from("onyx"),
+        Voices::Nova => String::from("nova"),
+        Voices::Shimmer => String::from("shimmer"),
+    };
+
+    generate_audio(voice_line, voice_choice).await;
 }
 
 #[tokio::main]
@@ -104,12 +109,14 @@ pub async fn initiate_chat(user: &String) {
         let mut user_message_content: String = String::new();
 
         stdin().read_line(&mut user_message_content).unwrap();
-        let chat_results: String = get_bot_response(&mut messages, user_message_content, user, Voices::Sam).await;
+        let chat_results: String = get_bot_response(&mut messages, user_message_content, user).await;
 
         println!(
             "Assistant: {}",
             &chat_results[15..],
         );
+        bot_voice(format!("{}", &chat_results[15..]), Voices::Onyx).await;
+
 
     }
 }
