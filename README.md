@@ -39,14 +39,14 @@ including:
 1. Install Rust on your PC [rustup is recommended](https://rustup.rs/)
 2. Create an [OpenAI](https://platform.openai.com/docs/overview) Account
    - Get an [OpenAI API Key](https://platform.openai.com/docs/guides/production-best-practices) and Add Credit to It
-3. Download the Senior Citizen Chatbot Repository and create the '.env' file in the test/ folder
+3. Download the Senior Citizen Chatbot Repository and create the '.env' file in the test/openAI_sencit_test/ folder
    - Example:
 ```
 git clone https://github.com/Alex-J-Christie/ai_for_senior_citizens_ist440w_24
 cd ai_for_senior_citizens_ist440w_24/test/openAI_sencit_test/
 touch .env
 ```
-4. In a text editor, type 'OPENAI_KEY=XX-proj-XX' (replace XX-proj-XX with your project key)
+4. In a text editor, open the '.env' file and type 'OPENAI_KEY=XX-proj-XX' (replace XX-proj-XX with your project key)
 5. From here, you can edit the code in a text editor and either build it or run it with [cargo](https://github.com/rust-lang/cargo)
    - Here is the man page
 ```
