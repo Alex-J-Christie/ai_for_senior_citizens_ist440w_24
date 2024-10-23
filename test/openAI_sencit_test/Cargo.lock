@@ -3013,6 +3013,7 @@ dependencies = [
  "curl",
  "directories",
  "dotenvy",
+ "hound",
  "iced",
  "mp3-duration",
  "openai",

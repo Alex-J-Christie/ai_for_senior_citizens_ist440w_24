@@ -1,20 +1,19 @@
 use crate::chat;
+use crate::chat::bot_voice;
+use crate::gui_view::Fonts::{Monospace, Serif};
 //chat.rs methods
 use chat::Voices;
 use chat::{create_bot, get_bot_response};
 use iced::alignment::Vertical;
 use iced::font::Family;
-use iced::widget::{button, container, pick_list, scrollable, text, text_input,
-                   vertical_space, Column, Container, Image, Row, Scrollable,
-                   Slider, Text, TextInput};
-use iced::{border, Color, Fill, FillPortion, Font, Pixels, Renderer, Size, Task, Theme};
-use crate::gui_view::Fonts::{Monospace, Serif};
 use iced::widget::container::Style;
 use iced::widget::scrollable::{Rail, Scroller};
+use iced::widget::{button, container, pick_list, scrollable, text, text_input, vertical_space, Column, Container, Image, Row, Scrollable, Slider, Text, TextInput};
+use iced::{border, Color, Fill, FillPortion, Font, Pixels, Renderer, Size, Task, Theme};
 use openai::chat::ChatCompletionMessage;
 //standards and openai
 use std::fmt::{Display, Formatter};
-use crate::chat::bot_voice;
+use crate::sttttts::get_audio_input;
 
 pub fn main() -> iced::Result {
     iced::application(Chat::title, Chat::update, Chat::view)
@@ -50,6 +49,7 @@ enum Message {
     TextFontChanged(Fonts),
     BotResponse(String),
     BotVoice,
+    StartMic,
     SideBarChanged,
 }
 
@@ -144,7 +144,10 @@ impl Chat {
 
         let in_out_field: Column<'_, Message> = Column::new()
                 .push(out_field)
-                .push(in_field);
+                .push(Row::new()
+                    .push(in_field)
+                    .push(button(text("Speak")).padding(20).on_press(Message::StartMic))
+                );
 
         let main_area: Container<'_, Message> = container(in_out_field)
                 .height(Fill)
@@ -226,6 +229,10 @@ impl Chat {
                 Task::none()
             }
             Message::BotVoice => {
+                Task::none()
+            }
+            Message::StartMic => {
+                get_audio_input();
                 Task::none()
             }
         }
