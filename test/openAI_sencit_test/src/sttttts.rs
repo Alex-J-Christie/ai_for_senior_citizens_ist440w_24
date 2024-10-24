@@ -2,7 +2,6 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Device, Host, SupportedStreamConfig};
 use curl::easy::{Easy, List};
 use dotenvy::dotenv;
-use hound::{SampleFormat, WavSpec, WavWriter};
 use mp3_duration;
 use rodio::{Decoder, OutputStream, OutputStreamHandle, Source};
 use serde_json::json;
@@ -11,6 +10,7 @@ use std::fs::File;
 use std::io::{BufReader, Write};
 use std::path::PathBuf;
 use std::time::Duration;
+use hound::{SampleFormat, WavSpec, WavWriter};
 use tokio::task;
 
 //I have tried to get mp3 file duration for 40 minutes, we're just going to assume the response is never longer than like 20 seconds im done
@@ -133,49 +133,72 @@ let response: String = String::from_utf8(response).unwrap();
     println!("{}", response);
 }
 
+//i am dead - low level audio libraries killed me
+//its 1 am im just gonna look for a different library tomorrow
 pub fn get_audio_input() {
-    let hosts = cpal::available_hosts();
 
-    println!("Available hosts: {:?}", hosts);
+    let _hosts = cpal::available_hosts();
+    let host = cpal::default_host();
+    // println!("Available hosts: {:?}", hosts);
+    // println!("Host: {:?}", host.id());
+    let devices = host.input_devices().expect("failed to get input devices");
+
+    let device_names: Vec<Device> = devices.into_iter()
+        .filter(|device| device.name().unwrap().contains("sysdefault"))
+        .collect::<Vec<Device>>();
+
+    println!("\n\n\n");
+
+    for (ind, device_name) in device_names.clone().iter().enumerate() {
+        println!("device {}: {}", ind, device_name.name().unwrap());
+    }
+
+    let selected_device = device_names.get(1).unwrap();
+    let mut supported_configs = selected_device
+        .supported_input_configs()
+        .expect("failed to get supported input configs");
+
+    // for config in supported_configs {
+    //     println!("Supported config: {:?}", config);
+    // }
+
+    let config = supported_configs
+        .next().unwrap();
+
+    // println!("config {:?}", config.min_sample_rate().0);
+
+    let sample_format = config.sample_format();
+    let channels = config.channels();
+    let sample_rate = config.min_sample_rate().0 * 2;
+
+    let spec = WavSpec {
+        channels,
+        sample_rate,
+        bits_per_sample: 16,
+        sample_format: SampleFormat::Int,
+    };
+    let mut writer = WavWriter::create("output.wav", spec)
+        .expect("Failed to create WAV file");
 
 
-    let host: Host = cpal::default_host();
-    let input_device: Device = host.default_input_device().expect("Failed to get default input device");
-    // let device_config: SupportedStreamConfig = input_device.default_input_config().into();
+    let stream = selected_device
+        .build_input_stream(
+            &config.with_max_sample_rate().into(),
+            move |data: &[f32], _: &cpal::InputCallbackInfo| {
+                for &sample in data.iter() {
+                    let int_sample = (sample * i16::MAX as f32) as i16;
+                    writer.write_sample(int_sample)
+                        .expect("failed to write to WAV file");
+                }
+            },
+            |err| {
+                eprintln!("{}", err);
+            },
+            None
+        )
+        .expect("failed to build input stream");
 
-    let mut supported_configs_range = input_device.supported_output_configs()
-        .expect("error while querying configs");
-    let supported_config = supported_configs_range.next()
-        .expect("no supported config?!")
-        .with_max_sample_rate();
-    // let config = supported_config.into();
-    // let sample_format = supported_config.sample_format();
+    stream.play().unwrap();
 
-
-
-    // let mut writer = WavWriter::create("output.wav", spec).expect("Failed to create WAV writer");
-
-    // let stream = match sample_format {
-    //     SampleFormat::I16 => { input_device.build_input_stream(&config, write_wav_file::<I16>, |err| {eprintln!("{}", err)}, None)}
-    //     SampleFormat::U16 => {}
-    //     SampleFormat::F32 => {}
-    // };
-    //
-    // stream.play().unwrap();
     std::thread::sleep(Duration::from_secs(10));
 }
-
-// fn write_wav_file<T: Sample>(data: &mut [T], _: &cpal::InputCallbackInfo) {
-//     let spec = WavSpec {
-//         channels: 1,
-//         sample_rate: data.sample_rate(),
-//         bits_per_sample: 32,
-//         sample_format: SampleFormat::Float,
-//     };
-//
-//     let mut writer = WavWriter::create("output.wav", spec).expect("Failed to create WAV writer");
-//     for sample in data {
-//         let sample_i16 = (sample * i16::MAX as f32) as i16;
-//         writer.write_sample(sample_i16).expect("Failed to write sample");
-//     }
-// }

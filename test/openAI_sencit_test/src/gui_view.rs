@@ -1,19 +1,21 @@
 use crate::chat;
 use crate::chat::bot_voice;
 use crate::gui_view::Fonts::{Monospace, Serif};
+use crate::sttttts::get_audio_input;
 //chat.rs methods
 use chat::Voices;
 use chat::{create_bot, get_bot_response};
 use iced::alignment::Vertical;
 use iced::font::Family;
+use iced::theme::palette::Pair;
 use iced::widget::container::Style;
 use iced::widget::scrollable::{Rail, Scroller};
-use iced::widget::{button, container, pick_list, scrollable, text, text_input, vertical_space, Column, Container, Image, Row, Scrollable, Slider, Text, TextInput};
+use iced::widget::{button, container, horizontal_space, pick_list, scrollable, text, text_input, vertical_space, Column, Container, Image, Row, Scrollable, Slider, Text, TextInput};
+use iced::Background::Color as BackgroundColor;
 use iced::{border, Color, Fill, FillPortion, Font, Pixels, Renderer, Size, Task, Theme};
 use openai::chat::ChatCompletionMessage;
 //standards and openai
 use std::fmt::{Display, Formatter};
-use crate::sttttts::get_audio_input;
 
 pub fn main() -> iced::Result {
     iced::application(Chat::title, Chat::update, Chat::view)
@@ -43,6 +45,7 @@ enum Message {
     TextAdded,
     UserChanged(String),
     UserAdded,
+    UserLogOut,
     ThemeChanged(Theme),
     VoiceChanged(Voices),
     TextSizeChanged(Pixels),
@@ -193,7 +196,16 @@ impl Chat {
             Message::UserAdded => {
                 self.user = Some(self.user_text.clone());
                 self.bot = create_bot(&self.user_text);
-                self.logs.push(format!("Welcome to the Chatbot Experience, {}! Say Hi to Your AI Assistant\n", &self.user_text));
+                self.logs.push(format!("Welcome to the Chatbot Experience, {}! Say Hi to Your AI Assistant\n (Notice: AI Voices Are Generated and Not Real Humans)", &self.user_text));
+                Task::none()
+            }
+            Message::UserLogOut => {
+                if self.logs.len() % 2 == 0 {
+                    self.logs.push(String::from("Goodbye!"));
+                }
+                self.logs.push(format!("User: {} has logged out", self.user_text));
+                self.user = None;
+                self.content = String::from("");
                 Task::none()
             }
             Message::ThemeChanged(theme) => {
@@ -251,9 +263,27 @@ impl Chat {
     fn side_bar(&self) -> Container<'_, Message> {
         let icon: Image = Image::new("icon.png");
 
-        let bar_button = button(text('≡'))
-            .on_press(Message::SideBarChanged)
-            .padding(10);
+        let button_theme = move |theme: &Theme, _status| {
+            let palette = theme.extended_palette();
+            let background: Pair = palette.background.base;
+
+            button::Style {
+                text_color: background.text,
+                background: Some(BackgroundColor(palette.background.weak.color)),
+                border: Default::default(),
+                shadow: Default::default(),
+            }
+        };
+
+        let bar_button = button(text(
+            match self.side_bar {
+                true => {"O"}
+                false => {"X"}
+            }
+        ))
+                    .on_press(Message::SideBarChanged)
+                    .padding(10)
+                    .style(button_theme.clone());
 
         let theme_list: Column<'_, Message> = Column::new()
             .push(text("Choose Theme"))
@@ -279,6 +309,19 @@ impl Chat {
             .width(Fill)
             .padding(20);
 
+        let logout_button =
+            Row::new()
+                .push(horizontal_space())
+                .push(
+            button(
+            text("log out")
+            )
+            .on_press(Message::UserLogOut)
+            .padding(10)
+                .style(button_theme.clone()),
+                )
+                .push(horizontal_space());
+
         let side_bar: Container<'_, Message> = match self.side_bar {
             true => {
                 container(
@@ -302,6 +345,7 @@ impl Chat {
                         .push(voice_list)
                         .push(text_size_slider)
                         .push(fonts_list)
+                        .push(logout_button)
                         .push(
                             Column::new()
                                 .push(vertical_space())
@@ -313,7 +357,6 @@ impl Chat {
                     .width(FillPortion(20))
             }
         };
-
         side_bar
     }
 }
