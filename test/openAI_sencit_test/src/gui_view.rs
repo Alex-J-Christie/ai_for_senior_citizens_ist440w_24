@@ -1,7 +1,7 @@
 use crate::chat;
 use crate::chat::bot_voice;
 use crate::gui_view::Fonts::{Monospace, Serif};
-use crate::sttttts::get_audio_input;
+use crate::sttttts::{get_audio_input, transcribe};
 //chat.rs methods
 use chat::Voices;
 use chat::{create_bot, get_bot_response};
@@ -12,10 +12,12 @@ use iced::widget::container::Style;
 use iced::widget::scrollable::{Rail, Scroller};
 use iced::widget::{button, container, horizontal_space, pick_list, scrollable, text, text_input, vertical_space, Column, Container, Image, Row, Scrollable, Slider, Text, TextInput};
 use iced::Background::Color as BackgroundColor;
-use iced::{border, Color, Fill, FillPortion, Font, Pixels, Renderer, Size, Task, Theme};
+use iced::{border, Color, Element, Fill, FillPortion, Font, Pixels, Renderer, Size, Task, Theme};
 use openai::chat::ChatCompletionMessage;
 //standards and openai
 use std::fmt::{Display, Formatter};
+use std::path::{Path, PathBuf};
+use iced::alignment::Vertical::Center;
 
 pub fn main() -> iced::Result {
     iced::application(Chat::title, Chat::update, Chat::view)
@@ -78,93 +80,27 @@ impl Chat {
     fn title(&self) -> String {
         String::from("Senior Citizen AI Chatbot Test")
     }
-    fn view(&self) -> Row<'_, Message> {
+    fn view(&self) -> Element<'_, Message> {
 
         let side_bar: Container<'_, Message> = self.side_bar();
 
-        let in_field: TextInput<'_, Message> = match &self.user {
-            Some(_) => {
-                text_input("Type something here...", &self.content)
-                .on_input(Message::TextChanged)
-                .on_submit(Message::TextAdded)
-                .width(Fill)
-                .padding(20)
-            }
-            None => {
-                text_input("Enter your name here....", &self.user_text)
-                .on_input(Message::UserChanged)
-                .on_submit(Message::UserAdded)
-                .width(Fill)
-                .padding(20)
-            }
-        };
+        let main_area: Container<'_, Message> = self.main_area();
 
-        let scrollable_content: Column<'_, Message> = Column::new()
-            .push(border_background(-1, text("Welcome to Your AI Companion! Enter Your Name to Chat!")
-                                        .size(Pixels::from(self.text_size.0))
-                                        .font(Font {
-                                            family: self.text_family,
-                                            weight: Default::default(),
-                                            stretch: Default::default(),
-                                            style: Default::default(),
-                                        })))
-            .push(Column::from_iter(self.logs.iter().enumerate().map(|(pos, value)|
-                  border_background(pos as i32, text(value)
-                 .size(Pixels::from(self.text_size.0))
-                 .font(Font {
-                     family: self.text_family,
-                     weight: Default::default(),
-                     stretch: Default::default(),
-                     style: Default::default(),
-                 })
-                ).into()
-            )));
-
-        let out_field: Scrollable<'_, Message> = scrollable(scrollable_content)
-                .width(Fill)
-                .height(Fill)
-                .style(move |_theme: &Theme, _status| {
-                    let rail: Rail = Rail {
-                        background: None,
-                        border: Default::default(),
-                        scroller: Scroller {
-                            color: Color::TRANSPARENT,
-                            border: Default::default()
-                        },
-                    };
-                    scrollable::Style {
-                        container: Default::default(),
-                        vertical_rail: Rail {
-                            background: None,
-                            border: Default::default(),
-                            scroller: Scroller { color: Default::default(), border: Default::default() },
-                        },
-                        horizontal_rail: rail,
-                        gap: None,
-                    }
-                })
-                .anchor_bottom();
-
-        let in_out_field: Column<'_, Message> = Column::new()
-                .push(out_field)
-                .push(Row::new()
-                    .push(in_field)
-                    .push(button(text("Speak")).padding(20).on_press(Message::StartMic))
-                );
-
-        let main_area: Container<'_, Message> = container(in_out_field)
-                .height(Fill)
-                .width(FillPortion(80))
-                .align_y(Vertical::Bottom)
-                .style(container::rounded_box)
-                .padding(20);
+        let center_pop_up: Container<'_, Message> = self.login_popup();
 
         let area: Row<'_, Message> = Row::new()
                 .push(side_bar)
                 .push(main_area)
                 .padding(20);
 
-        area
+        match self.user {
+            None => {
+                center_pop_up.into()
+            }
+            Some(_) => {
+                area.into()
+            }
+        }
     }
     fn update(&mut self, message: Message) -> Task<Message> {
         match message {
@@ -200,12 +136,14 @@ impl Chat {
                 Task::none()
             }
             Message::UserLogOut => {
+                self.logs.clear();
                 if self.logs.len() % 2 == 0 {
                     self.logs.push(String::from("Goodbye!"));
                 }
                 self.logs.push(format!("User: {} has logged out", self.user_text));
                 self.user = None;
-                self.content = String::from("");
+                self.content.clear();
+                self.user_text.clear();
                 Task::none()
             }
             Message::ThemeChanged(theme) => {
@@ -244,7 +182,20 @@ impl Chat {
                 Task::none()
             }
             Message::StartMic => {
-                get_audio_input();
+                get_audio_input().expect("Could not find usable mic or sample rate issue");
+
+                let response = transcribe(PathBuf::from("output.wav"));
+                if Path::new("output.wav").exists() {
+                    self.logs.push(format!("{}: {}\n", self.user.clone().unwrap(), response));
+                    let user_text: String = self.user_text.clone();
+                    let bot: Vec<ChatCompletionMessage> = self.bot.clone();
+                    self.content.clear();
+                    return Task::perform(async move {
+                        Self::fetch_bot_response(bot, response, user_text)
+                    }, |response| {
+                        Message::BotResponse(response)
+                    });
+                }
                 Task::none()
             }
         }
@@ -358,6 +309,158 @@ impl Chat {
             }
         };
         side_bar
+    }
+    fn main_area(&self) -> Container<'_, Message> {
+        let in_field: TextInput<'_, Message> = match &self.user {
+            Some(_) => {
+                text_input("Type something here...", &self.content)
+                    .on_input(Message::TextChanged)
+                    .on_submit(Message::TextAdded)
+                    .width(Fill)
+                    .padding(20)
+            }
+            None => {
+                text_input("Enter your name here....", &self.user_text)
+                    .on_input(Message::UserChanged)
+                    .on_submit(Message::UserAdded)
+                    .width(Fill)
+                    .padding(20)
+            }
+        };
+
+        let scrollable_content: Column<'_, Message> = Column::new()
+            .push(border_background(-1, text("Welcome to Your AI Companion! Enter Your Name to Chat!")
+                .size(Pixels::from(self.text_size.0))
+                .font(Font {
+                    family: self.text_family,
+                    weight: Default::default(),
+                    stretch: Default::default(),
+                    style: Default::default(),
+                })))
+            .push(Column::from_iter(self.logs.iter().enumerate().map(|(pos, value)|
+                border_background(pos as i32, text(value)
+                    .size(Pixels::from(self.text_size.0))
+                    .font(Font {
+                        family: self.text_family,
+                        weight: Default::default(),
+                        stretch: Default::default(),
+                        style: Default::default(),
+                    })
+                ).into()
+            )));
+
+        let out_field: Scrollable<'_, Message> = scrollable(scrollable_content)
+            .width(Fill)
+            .height(Fill)
+            .style(move |_theme: &Theme, _status| {
+                let rail: Rail = Rail {
+                    background: None,
+                    border: Default::default(),
+                    scroller: Scroller {
+                        color: Color::TRANSPARENT,
+                        border: Default::default()
+                    },
+                };
+                scrollable::Style {
+                    container: Default::default(),
+                    vertical_rail: Rail {
+                        background: None,
+                        border: Default::default(),
+                        scroller: Scroller { color: Default::default(), border: Default::default() },
+                    },
+                    horizontal_rail: rail,
+                    gap: None,
+                }
+            })
+            .anchor_bottom();
+
+        let in_out_field: Column<'_, Message> = match self.user {
+            Some(_) => {
+                Column::new()
+                    .push(out_field)
+                    .push(Row::new()
+                        .push(in_field)
+                        .push(button(text("Speak"))
+                            .padding(20)
+                            .style(move |theme: &Theme, _status| {
+                                let palette = theme.extended_palette();
+                                let background: Pair = palette.background.base;
+
+                                button::Style {
+                                    text_color: background.text,
+                                    background: Some(BackgroundColor(palette.background.base.color)),
+                                    border: Default::default(),
+                                    shadow: Default::default(),
+                                }
+                            })
+                            .on_press(Message::StartMic))
+                    )
+            }
+            None => {
+                Column::new()
+                    .push(out_field)
+                    .push(in_field)
+            }
+        };
+
+        let main_area: Container<'_, Message> = container(in_out_field)
+            .height(Fill)
+            .width(FillPortion(80))
+            .align_y(Vertical::Bottom)
+            .style(container::rounded_box)
+            .padding(20);
+        main_area
+    }
+    fn login_popup(&self) -> Container<'_, Message> {
+        container(
+            Column::new()
+                .push(vertical_space().height(FillPortion(3)))
+                .push(
+                    Row::new()
+                        .push(horizontal_space().width(FillPortion(1)))
+                        .push(
+                            container(Column::new()
+                                .push(
+                                    container(text("Please Login"))
+                                        .center_x(Fill)
+                                        .padding(10)
+                                )
+                                .push(
+                                    Row::new()
+                                        .push(horizontal_space().width(FillPortion(1)))
+                                        .push(
+                                            container(
+                                                text_input("Enter your name here....", &self.user_text)
+                                                    .on_input(Message::UserChanged)
+                                                    .on_submit(Message::UserAdded)
+                                                    .padding(10)
+                                                    .width(Fill)
+                                            )
+                                                .width(FillPortion(2))
+                                                .padding(10)
+                                        )
+                                        .push(horizontal_space().width(FillPortion(1)))
+                                )
+                            )
+                                .align_y(Center)
+                                .center_y(FillPortion(1))
+                                .center_x(FillPortion(2))
+                                .style(move |theme: &Theme| {
+                                    let palette = theme.extended_palette();
+                                    let background: Pair = palette.background.strong;
+
+                                    Style {
+                                        text_color: Some(background.text.into()),
+                                        background: Some(background.color.into()),
+                                        border: border::rounded(border::radius(20)),
+                                        shadow: Default::default(),
+                                    }
+                                })
+                        )
+                        .push(horizontal_space().width(FillPortion(1)))
+                )
+                .push(vertical_space().height(FillPortion(3)))
+        )
     }
 }
 

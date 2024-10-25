@@ -1,8 +1,9 @@
 use crate::chat::initiate_chat;
 use crate::db_man::test;
 use crate::gui_view;
+use crate::sttttts::transcribe;
 use clap::{arg, command, Arg, ArgMatches};
-use crate::sttttts::get_audio_input;
+use std::path::PathBuf;
 
 pub fn run_args(args: ArgMatches) {
         if let Some(a) = args.get_one::<String>("sign_in") {
@@ -24,7 +25,8 @@ pub fn run_args(args: ArgMatches) {
                 // let audio: PathBuf = PathBuf::from("test-mic.wav");
                 // sttttts::transcribe(audio);
                 // sttttts::generate_audio(String::from("Whoa, that's really good Jason!"), String::from("alloy"));
-                get_audio_input();
+                // get_audio_input().expect("Failed to find mic");
+                println!("response: {}", transcribe(PathBuf::from("output.wav")));
             }
         }
     }
