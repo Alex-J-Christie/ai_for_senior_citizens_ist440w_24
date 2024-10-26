@@ -1,6 +1,6 @@
 use anyhow::Error;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use cpal::{Device, FromSample, Host, Sample, SupportedStreamConfig};
+use cpal::{Device, FromSample, Host, Sample, Stream, StreamError, SupportedStreamConfig};
 use curl::easy::{Easy, List};
 use dotenvy::dotenv;
 use hound::{SampleFormat, WavSpec, WavWriter};
@@ -11,9 +11,11 @@ use std::env;
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Write};
 use std::path::PathBuf;
+use std::process::Command;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::task;
+use crate::chat::Voices;
 
 //I have tried to get mp3 file duration for 40 minutes, we're just going to assume the response is never longer than like 20 seconds im done
 //never mind, doing that ruins everything so we need to get exact audio duration - i hate it here
@@ -52,47 +54,57 @@ fn get_file_duration() -> Duration {
     duration
 }
 
-pub async fn generate_audio(audio_in: String, voice: String) {
-    dotenv().unwrap();
-    let api_key: String = env::var("OPENAI_KEY").unwrap();
-    let mut easy = Easy::new();
+pub async fn generate_audio(audio_in: String, voice: Voices) {
+    match voice {
+        Voices::None => {
+            Command::new("espeak-ng")
+                .arg(audio_in)
+                .spawn()
+                .expect("espeak-ng command failed or is not present");
+        }
+        _ => {
+            dotenv().unwrap();
+            let api_key: String = env::var("OPENAI_KEY").unwrap();
+            let mut easy = Easy::new();
 
-    easy.url("https://api.openai.com/v1/audio/speech").unwrap();
-    easy.post(true).unwrap();
+            easy.url("https://api.openai.com/v1/audio/speech").unwrap();
+            easy.post(true).unwrap();
 
-    let mut headers = List::new();
-    headers.append(&format!("Authorization: Bearer {}", api_key)).unwrap();
-    headers.append("Content-Type: application/json").unwrap();
-    easy.http_headers(headers).unwrap();
+            let mut headers = List::new();
+            headers.append(&format!("Authorization: Bearer {}", api_key)).unwrap();
+            headers.append("Content-Type: application/json").unwrap();
+            easy.http_headers(headers).unwrap();
 
+            let json_payload = json!({
+                "model": "tts-1",
+                "input": audio_in,
+                "voice": voice.to_string(),
+            });
 
-    let json_payload = json!({
-        "model": "tts-1",
-        "input": audio_in,
-        "voice": voice
-    });
-    let json_str = serde_json::to_string(&json_payload).unwrap();
+            let json_str = serde_json::to_string(&json_payload).unwrap();
 
-    easy.post_fields_copy(json_str.as_bytes()).unwrap();
+            easy.post_fields_copy(json_str.as_bytes()).unwrap();
 
-    let mut output_file = File::create("output.mp3").unwrap();
+            let mut output_file = File::create("output.mp3").unwrap();
 
-    {
-        let mut transfer = easy.transfer();
-        transfer.write_function(|data| {
-            output_file.write_all(data).unwrap();
-            Ok(data.len())
-        }).unwrap();
-        transfer.perform().unwrap();
-    }
+            {
+                let mut transfer = easy.transfer();
+                transfer.write_function(|data| {
+                    output_file.write_all(data).unwrap();
+                    Ok(data.len())
+                }).unwrap();
+                transfer.perform().unwrap();
+            }
 
-    let response = easy.response_code().unwrap();
-    match response {
-        200 => {
-            // println!("Audio generated at output.mp3");
-            play_audio().await;
-        },
-        _ => println!("Error: {}", response)
+            let response = easy.response_code().unwrap();
+            match response {
+                200 => {
+                    // println!("Audio generated at output.mp3");
+                    play_audio().await;
+                },
+                _ => println!("Error: {}", response)
+            }
+        }
     }
 
 }
@@ -146,25 +158,25 @@ pub fn transcribe(audio_in: PathBuf) -> String {
 
 
 pub fn get_audio_input() -> Result<(), Error> {
-    let host = cpal::default_host();
-    let device = host.default_input_device().expect("failed to get default output device");
-    let config = device.default_input_config().unwrap();
+    let host: Host = cpal::default_host();
+    let device: Device = host.default_input_device().expect("failed to get default output device");
+    let config: SupportedStreamConfig = device.default_input_config().unwrap();
     println!("Default Input Config: {:?}", config);
 
     let path: String = String::from("output.wav");
-    let spec = wav_spec_from_config(&config);
-    let writer = WavWriter::create(path, spec).unwrap();
-    let writer = Arc::new(Mutex::new(Some(writer)));
+    let spec: WavSpec = wav_spec_from_config(&config);
+    let writer: WavWriter<BufWriter<File>> = WavWriter::create(path, spec).unwrap();
+    let writer: Arc<Mutex<Option<WavWriter<BufWriter<File>>>>> = Arc::new(Mutex::new(Some(writer)));
 
     println!("Begin recording...");
 
-    let writer_2 = writer.clone();
+    let writer_2: Arc<Mutex<Option<WavWriter<BufWriter<File>>>>> = writer.clone();
 
-    let err_fn = move |err| {
+    let err_fn: fn(StreamError) = move |err: StreamError| {
         eprintln!("an error occurred on stream: {}", err);
     };
 
-    let stream = match config.sample_format() {
+    let stream: Stream = match config.sample_format() {
         cpal::SampleFormat::I8 => device.build_input_stream(
             &config.into(),
             move |data, _: &_| write_input_data::<i8, i8>(data, &writer_2),
@@ -201,7 +213,10 @@ pub fn get_audio_input() -> Result<(), Error> {
 
     std::thread::sleep(Duration::from_secs(10));
     drop(stream);
-    writer.lock().unwrap().take().unwrap().finalize().unwrap();
+    writer
+        .lock().unwrap()
+        .take().unwrap()
+        .finalize().unwrap();
     println!("Finished!");
     Ok(())
 }

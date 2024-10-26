@@ -6,6 +6,7 @@ use crate::sttttts::{get_audio_input, transcribe};
 use chat::Voices;
 use chat::{create_bot, get_bot_response};
 use iced::alignment::Vertical;
+use iced::alignment::Vertical::Center;
 use iced::font::Family;
 use iced::theme::palette::Pair;
 use iced::widget::container::Style;
@@ -16,8 +17,11 @@ use iced::{border, Color, Element, Fill, FillPortion, Font, Pixels, Renderer, Si
 use openai::chat::ChatCompletionMessage;
 //standards and openai
 use std::fmt::{Display, Formatter};
+use std::fs::File;
+use std::io;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use iced::alignment::Vertical::Center;
+use serde::{Deserialize, Serialize};
 
 pub fn main() -> iced::Result {
     iced::application(Chat::title, Chat::update, Chat::view)
@@ -33,12 +37,142 @@ struct Chat {
     bot: Vec<ChatCompletionMessage>,
     content: String,
     logs: Vec<String>,
+    settings: Settings,
+    side_bar: bool,
+    recording: (bool, usize),
+}
+struct Settings {
     theme: Theme,
     voice: Voices,
     text_size: Pixels,
     text_font: Fonts,
     text_family: Family,
-    side_bar: bool,
+}
+
+#[derive(Serialize, Deserialize)]
+struct TempSettings {
+    theme: String,
+    voice: String,
+    text_size: f32,
+    text_font: String,
+    text_family: String,
+}
+fn save_settings(data: &Settings, file_path: &Path) -> io::Result<()> {
+
+    let out_data: TempSettings = TempSettings {
+        theme: match data.theme {
+            Theme::Light => {String::from("Light")}
+            Theme::Dark => {String::from("Dark")}
+            Theme::Dracula => {String::from("Dracula")}
+            Theme::Nord => {String::from("Nord")}
+            Theme::SolarizedLight => {String::from("SolarizedLight")}
+            Theme::SolarizedDark => {String::from("SolarizedDark")}
+            Theme::GruvboxLight => {String::from("GruvboxLight")}
+            Theme::GruvboxDark => {String::from("GruvboxDark")}
+            Theme::CatppuccinLatte => {String::from("CatppuccinLatte")}
+            Theme::CatppuccinFrappe => {String::from("CatppuccinFrappe")}
+            Theme::CatppuccinMacchiato => {String::from("CatppuccinMacchiato")}
+            Theme::CatppuccinMocha => {String::from("CatppuccinMocha")}
+            Theme::TokyoNight => {String::from("TokyoNight")}
+            Theme::TokyoNightStorm => {String::from("TokyoNightStorm")}
+            Theme::TokyoNightLight => {String::from("TokyoNightLight")}
+            Theme::KanagawaWave => {String::from("KanagawaWave")}
+            Theme::KanagawaDragon => {String::from("KanagawaDragon")}
+            Theme::KanagawaLotus => {String::from("KanagawaLotus")}
+            Theme::Moonfly => {String::from("Moonfly")}
+            Theme::Nightfly => {String::from("Nightfly")}
+            Theme::Oxocarbon => {String::from("Oxocarbon")}
+            Theme::Ferra => {String::from("Ferra")}
+            Theme::Custom(_) => {String::from("Custom")}
+        },
+        voice: match data.voice {
+            Voices::Alloy => {String::from("Alloy")}
+            Voices::Echo => {String::from("Echo")}
+            Voices::Fable => {String::from("Fable")}
+            Voices::Onyx => {String::from("Onyx")}
+            Voices::Nova => {String::from("Nova")}
+            Voices::Shimmer => {String::from("Shimmer")}
+            Voices::None => {String::from("None")}
+        },
+        text_size: data.text_size.0,
+        text_font: match data.text_font {
+            Serif => {String::from("Serif")}
+            Monospace => {String::from("Monospace")}
+        },
+        text_family: match data.text_family {
+            Family::Serif => {String::from("Serif")}
+            Family::SansSerif => {String::from("SansSerif")}
+            Family::Cursive => {String::from("Cursive")}
+            Family::Fantasy => {String::from("Fantasy")}
+            Family::Monospace => {String::from("Monospace")}
+            _ => {String::from("None")}
+        },
+    };
+
+    let toml: String = toml::to_string(&out_data).unwrap();
+    let mut file = File::create(file_path).unwrap();
+    file.write_all(toml.as_bytes()).unwrap();
+    Ok(())
+}
+//these are terrible and i feel bad that i wrote them - but i need to sleep at some point
+fn read_settings(file_path: &Path) -> io::Result<Settings> {
+    let mut file = File::open(file_path).unwrap();
+    let mut content = String::new();
+    file.read_to_string(&mut content).unwrap();
+    let out_settings: TempSettings = toml::from_str(&content).unwrap();
+    let settings: Settings = Settings {
+        theme: match out_settings.theme.as_str() {
+            "Light" => {Theme::Light}
+            "Dark" => {Theme::Dark}
+            "Dracula" => {Theme::Dracula}
+            "Nord" => {Theme::Nord}
+            "SolarizedLight" => {Theme::SolarizedLight}
+            "SolarizedDark" => {Theme::SolarizedDark}
+            "GruvboxLight" => {Theme::GruvboxLight}
+            "GruvboxDark" => {Theme::GruvboxDark}
+            "CatppuccinLatte" => {Theme::CatppuccinLatte}
+            "CatppuccinFrappe" => {Theme::CatppuccinFrappe}
+            "CatppuccinMacchiato" => {Theme::CatppuccinMacchiato}
+            "CatppuccinMocha" => {Theme::CatppuccinMocha}
+            "TokyoNight" => {Theme::TokyoNight}
+            "TokyoNightStorm" => {Theme::TokyoNightStorm}
+            "TokyoNightLight" => {Theme::TokyoNightLight}
+            "KanagawaWave" => {Theme::KanagawaWave}
+            "KanagawaDragon" => {Theme::KanagawaDragon}
+            "KanagawaLotus" => {Theme::KanagawaLotus}
+            "Moonfly" => {Theme::Moonfly}
+            "Nightfly" => {Theme::Nightfly}
+            "Oxocarbon" => {Theme::Oxocarbon}
+            "Ferra" => {Theme::Ferra}
+            _ => {Theme::GruvboxDark}
+        },
+        voice: match out_settings.voice.as_str() {
+            "Alloy" => {Voices::Alloy}
+            "Echo" => {Voices::Echo}
+            "Fable" => {Voices::Fable}
+            "Onyx" => {Voices::Onyx}
+            "Nova" => {Voices::Nova}
+            "Shimmer" => {Voices::Shimmer}
+            "None" => {Voices::None}
+            &_ => {todo!()}
+        },
+        text_size: Pixels(out_settings.text_size),
+        text_font: match out_settings.text_font.as_str() {
+            "Serif" => {Serif}
+            "Monospace" => {Monospace}
+            &_ => {todo!()}
+        },
+        text_family: match out_settings.text_family.as_str() {
+            "Serif" => {Family::Serif}
+            "SansSerif" => {Family::SansSerif}
+            "Cursive" => {Family::Cursive}
+            "Fantasy" => {Family::Fantasy}
+            "Monospace" => {Family::Monospace}
+            _ => {Family::Serif}
+        },
+    };
+
+    Ok(settings)
 }
 
 #[derive(Debug, Clone)]
@@ -56,6 +190,7 @@ enum Message {
     BotVoice,
     StartMic,
     SideBarChanged,
+    SettingsSaved,
 }
 
 impl Default for Chat {
@@ -66,12 +201,19 @@ impl Default for Chat {
             bot: Vec::new(),
             content: "".to_string(),
             logs: vec![],
-            theme: Theme::GruvboxDark,
-            voice: Voices::Alloy,
-            text_size: Pixels(16.0),
-            text_font: Serif,
-            text_family: Family::SansSerif,
+            settings: if Path::new("settings.toml").exists() {
+                read_settings(Path::new("settings.toml")).expect("Could not read")
+            } else {
+                Settings {
+                    theme: Theme::GruvboxDark,
+                    voice: Voices::Alloy,
+                    text_size: Pixels(16.0),
+                    text_font: Serif,
+                    text_family: Family::SansSerif,
+                }
+            },
             side_bar: true,
+            recording: (false, 10),
         }
     }
 }
@@ -88,17 +230,26 @@ impl Chat {
 
         let center_pop_up: Container<'_, Message> = self.login_popup();
 
+        let recording_pop_up: Container<'_, Message> = self.recording_popup();
+
         let area: Row<'_, Message> = Row::new()
                 .push(side_bar)
                 .push(main_area)
                 .padding(20);
 
-        match self.user {
-            None => {
-                center_pop_up.into()
+        match self.recording.0 {
+            true => {
+                recording_pop_up.into()
             }
-            Some(_) => {
-                area.into()
+            false => {
+                match self.user {
+                    None => {
+                        center_pop_up.into()
+                    }
+                    Some(_) => {
+                        area.into()
+                    }
+                }
             }
         }
     }
@@ -147,13 +298,14 @@ impl Chat {
                 Task::none()
             }
             Message::ThemeChanged(theme) => {
-                self.theme = theme;
+                self.settings.theme = theme;
                 Task::none()
             }
             Message::BotResponse(response) => {
+                self.recording = (false, 10);
                 let print_line: String = response.to_string()[15..].parse().unwrap();
                 self.logs.push(format!("Assistant: {}\n", print_line));
-                let voice: Voices = self.voice.clone();
+                let voice: Voices = self.settings.voice.clone();
                 self.content.clear();
                 Task::perform(async move {
                     Self::play_bot_voice(print_line, voice)
@@ -162,28 +314,28 @@ impl Chat {
                 })
             }
             Message::VoiceChanged(voice) => {
-                self.voice = voice;
+                self.settings.voice = voice;
                 Task::none()
             }
             Message::TextSizeChanged(size) => {
-                self.text_size = size;
+                self.settings.text_size = size;
                 Task::none()
             }
             Message::TextFontChanged(font) => {
-                self.text_font = font.clone();
-                self.text_family = font.convert_to_family();
+                self.settings.text_font = font.clone();
+                self.settings.text_family = font.convert_to_family();
                 Task::none()
             }
             Message::SideBarChanged => {
-                self.side_bar = !(self.side_bar);
+                self.side_bar = !self.side_bar;
                 Task::none()
             }
             Message::BotVoice => {
                 Task::none()
             }
             Message::StartMic => {
+                self.recording.0 = true;
                 get_audio_input().expect("Could not find usable mic or sample rate issue");
-
                 let response = transcribe(PathBuf::from("output.wav"));
                 if Path::new("output.wav").exists() {
                     self.logs.push(format!("{}: {}\n", self.user.clone().unwrap(), response));
@@ -198,6 +350,10 @@ impl Chat {
                 }
                 Task::none()
             }
+            Message::SettingsSaved => {
+                save_settings(&self.settings, Path::new("settings.toml")).expect("Cannot write to file");
+                Task::none()
+            }
         }
     }
     #[tokio::main]
@@ -209,7 +365,7 @@ impl Chat {
         bot_voice(input_text, voice).await
     }
     fn theme(&self) -> Theme {
-        self.theme.clone()
+        self.settings.theme.clone()
     }
     fn side_bar(&self) -> Container<'_, Message> {
         let icon: Image = Image::new("icon.png");
@@ -226,52 +382,62 @@ impl Chat {
             }
         };
 
-        let bar_button = button(text(
-            match self.side_bar {
+        let bar_button = button(
+            text(match self.side_bar {
                 true => {"O"}
                 false => {"X"}
-            }
-        ))
-                    .on_press(Message::SideBarChanged)
-                    .padding(10)
-                    .style(button_theme.clone());
+                    }
+                )
+            )
+            .on_press(Message::SideBarChanged)
+            .padding(10)
+            .style(button_theme.clone());
 
         let theme_list: Column<'_, Message> = Column::new()
             .push(text("Choose Theme"))
-            .push(pick_list(Theme::ALL, Some(&self.theme), Message::ThemeChanged)
+            .push(pick_list(Theme::ALL, Some(&self.settings.theme), Message::ThemeChanged)
                 .width(Fill))
             .padding(20);
 
         let voice_list: Column<'_, Message> = Column::new()
             .push(text("Choose a Voice"))
-            .push(pick_list(Voices::ALL, Some(&self.voice), Message::VoiceChanged))
+            .push(pick_list(Voices::ALL, Some(&self.settings.voice), Message::VoiceChanged))
             .width(Fill)
             .padding(20);
 
         let text_size_slider: Column<'_, Message> = Column::new()
-            .push(text(format!("Set Font Size: {}", self.text_size.0)))
-            .push(Slider::new(8..=32, self.text_size.0 as u16, |value| Message::TextSizeChanged(Pixels(value as f32 ))))
+            .push(text(format!("Set Font Size: {}", self.settings.text_size.0)))
+            .push(Slider::new(8..=32, self.settings.text_size.0 as u16, |value| Message::TextSizeChanged(Pixels(value as f32 ))))
             .width(Fill)
             .padding(20);
 
         let fonts_list: Column<'_, Message> = Column::new()
             .push(text("Set Font Type:"))
-            .push(pick_list(Fonts::ALL, Some(&self.text_font), Message::TextFontChanged))
+            .push(pick_list(Fonts::ALL, Some(&self.settings.text_font), Message::TextFontChanged))
             .width(Fill)
             .padding(20);
 
-        let logout_button =
-            Row::new()
-                .push(horizontal_space())
-                .push(
-            button(
-            text("log out")
-            )
-            .on_press(Message::UserLogOut)
-            .padding(10)
+        let settings_save_button: Row<'_, Message> = Row::new()
+            .push(horizontal_space())
+            .push(
+                button(text("Save Settings"))
+                .on_press(Message::SettingsSaved)
+                .padding(10)
                 .style(button_theme.clone()),
-                )
-                .push(horizontal_space());
+            )
+            .push(horizontal_space())
+            .padding(10);
+
+        let logout_button: Row<'_, Message> = Row::new()
+            .push(horizontal_space())
+            .push(
+                button(text("log out"))
+                .on_press(Message::UserLogOut)
+                .padding(10)
+                .style(button_theme.clone()),
+            )
+            .push(horizontal_space())
+            .padding(10);
 
         let side_bar: Container<'_, Message> = match self.side_bar {
             true => {
@@ -296,6 +462,7 @@ impl Chat {
                         .push(voice_list)
                         .push(text_size_slider)
                         .push(fonts_list)
+                        .push(settings_save_button)
                         .push(logout_button)
                         .push(
                             Column::new()
@@ -306,6 +473,7 @@ impl Chat {
                     .center_x(50)
                     .height(Fill)
                     .width(FillPortion(20))
+
             }
         };
         side_bar
@@ -330,18 +498,18 @@ impl Chat {
 
         let scrollable_content: Column<'_, Message> = Column::new()
             .push(border_background(-1, text("Welcome to Your AI Companion! Enter Your Name to Chat!")
-                .size(Pixels::from(self.text_size.0))
+                .size(Pixels::from(self.settings.text_size.0))
                 .font(Font {
-                    family: self.text_family,
+                    family: self.settings.text_family,
                     weight: Default::default(),
                     stretch: Default::default(),
                     style: Default::default(),
                 })))
             .push(Column::from_iter(self.logs.iter().enumerate().map(|(pos, value)|
                 border_background(pos as i32, text(value)
-                    .size(Pixels::from(self.text_size.0))
+                    .size(Pixels::from(self.settings.text_size.0))
                     .font(Font {
-                        family: self.text_family,
+                        family: self.settings.text_family,
                         weight: Default::default(),
                         stretch: Default::default(),
                         style: Default::default(),
@@ -412,58 +580,83 @@ impl Chat {
         main_area
     }
     fn login_popup(&self) -> Container<'_, Message> {
-        container(
-            Column::new()
-                .push(vertical_space().height(FillPortion(3)))
-                .push(
-                    Row::new()
-                        .push(horizontal_space().width(FillPortion(1)))
-                        .push(
-                            container(Column::new()
-                                .push(
-                                    container(text("Please Login"))
-                                        .center_x(Fill)
-                                        .padding(10)
-                                )
-                                .push(
-                                    Row::new()
-                                        .push(horizontal_space().width(FillPortion(1)))
-                                        .push(
-                                            container(
-                                                text_input("Enter your name here....", &self.user_text)
-                                                    .on_input(Message::UserChanged)
-                                                    .on_submit(Message::UserAdded)
-                                                    .padding(10)
-                                                    .width(Fill)
-                                            )
-                                                .width(FillPortion(2))
-                                                .padding(10)
-                                        )
-                                        .push(horizontal_space().width(FillPortion(1)))
-                                )
-                            )
-                                .align_y(Center)
-                                .center_y(FillPortion(1))
-                                .center_x(FillPortion(2))
-                                .style(move |theme: &Theme| {
-                                    let palette = theme.extended_palette();
-                                    let background: Pair = palette.background.strong;
-
-                                    Style {
-                                        text_color: Some(background.text.into()),
-                                        background: Some(background.color.into()),
-                                        border: border::rounded(border::radius(20)),
-                                        shadow: Default::default(),
-                                    }
-                                })
-                        )
-                        .push(horizontal_space().width(FillPortion(1)))
-                )
-                .push(vertical_space().height(FillPortion(3)))
+        let input_field_container = container(
+            text_input("Enter your name here....", &self.user_text)
+                .on_input(Message::UserChanged)
+                .on_submit(Message::UserAdded)
+                .padding(10)
+                .width(Fill)
         )
+            .width(FillPortion(2))
+            .padding(10);
+
+        let input_box: Row<'_, Message> = self.vertical_width_pad(input_field_container.into(), 1);
+
+        let login_box: Container<'_, Message> = container(Column::new()
+            .push(container(text("Please Login"))
+                    .center_x(Fill)
+                    .padding(10))
+            .push(input_box))
+            .align_y(Center)
+            .center_y(FillPortion(1))
+            .center_x(FillPortion(2))
+            .style(move |theme: &Theme| {
+                self.button_theme(theme)
+            });
+
+        let output_row: Row<'_, Message> = self.vertical_width_pad(login_box.into(), 1);
+
+        container(self.horizontal_height_pad(output_row.into(), 3))
+    }
+    fn recording_popup(&self) -> Container<'_, Message> {
+
+        let signpost_container: Container<'_, Message> = container(text(format!("Recording: {} Seconds Remaining", self.recording.1)))
+            .center_x(Fill)
+            .padding(10);
+
+        let blank_space: Row<'_, Message> = Row::new()
+            .push(horizontal_space().width(FillPortion(1)))
+            .push(horizontal_space().width(FillPortion(1))
+            );
+
+        let recording_container: Container<'_, Message> = container(Column::new()
+            .push(signpost_container)
+            .push(blank_space))
+            .align_y(Center)
+            .center_y(FillPortion(1))
+            .center_x(FillPortion(2))
+            .style(move |theme: &Theme| {
+                self.button_theme(theme)
+            });
+
+        let recording_row: Row<'_, Message> = self.vertical_width_pad(recording_container.into(), 1);
+
+        container(self.horizontal_height_pad(recording_row.into(), 3))
+    }
+    fn button_theme(&self, theme: &Theme) -> Style {
+            let palette = theme.extended_palette();
+            let background: Pair = palette.background.strong;
+            Style {
+                text_color: Some(background.text.into()),
+                background: Some(background.color.into()),
+                border: border::rounded(border::radius(20)),
+                shadow: Default::default(),
+            }
+    }
+    //the height variable is temporary - this should NOT be determined by a bool - **FIX LATER**
+    fn vertical_width_pad<'a>(&self, container: Element<'a, Message>, fill: u16) -> Row<'a, Message> {
+            Row::new()
+                .push(horizontal_space().width(FillPortion(fill)))
+                .push(container)
+                .push(horizontal_space().width(FillPortion(fill)))
+    }
+    fn horizontal_height_pad<'a>(&self, container: Element<'a, Message>, fill: u16) -> Column<'a, Message> {
+        Column::new()
+            .push(vertical_space().height(FillPortion(fill)))
+            .push(container)
+            .push(vertical_space().height(FillPortion(fill)))
     }
 }
-
 //iced widget helpers
 fn border_background(pos: i32, text_input: Text<Theme, Renderer>) -> Container<Message> {
     let user_assignment: bool = pos % 2 == 0;
@@ -554,7 +747,6 @@ impl Fonts {
         }
     }
 }
-
 
 // let load_data = match self {
 //     Montserrat => read("fonts/Montserrat/static/Montserrat-Medium.ttf"),

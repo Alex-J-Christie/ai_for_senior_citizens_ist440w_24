@@ -17,7 +17,8 @@ pub enum Voices {
     Fable,
     Onyx,
     Nova,
-    Shimmer
+    Shimmer,
+    None
 }
 
 impl Voices {
@@ -28,6 +29,7 @@ impl Voices {
         Self::Onyx,
         Self::Nova,
         Self::Shimmer,
+        Self::None
     ];
 }
 
@@ -40,10 +42,13 @@ impl Display for Voices {
             Voices::Onyx => write!(f, "Onyx"),
             Voices::Nova => write!(f, "Nova"),
             Voices::Shimmer => write!(f, "Shimmer"),
+            Voices::None => write!(f, "None")
 
         }
     }
 }
+
+
 
 pub fn create_bot(user: &String) -> Vec<ChatCompletionMessage> {
     dotenv().unwrap();
@@ -87,16 +92,7 @@ pub async fn get_bot_response(messages: &mut Vec<ChatCompletionMessage>, user_me
 }
 
 pub async fn bot_voice(voice_line: String, voice: Voices) {
-    let voice_choice: String = match voice {
-        Voices::Alloy => String::from("alloy"),
-        Voices::Echo => String::from("echo"),
-        Voices::Fable => String::from("fable"),
-        Voices::Onyx => String::from("onyx"),
-        Voices::Nova => String::from("nova"),
-        Voices::Shimmer => String::from("shimmer"),
-    };
-
-    generate_audio(voice_line, voice_choice).await;
+    generate_audio(voice_line, voice).await;
 }
 
 #[tokio::main]
