@@ -10,7 +10,7 @@ This project uses powerful technology to create a fully featured, comprehensive 
 
 * Written in Rust :crab:
 * Powered by OpenAI :robot:
-* ~~Brought to Life by ElevenLabs :basecamp:~~ (Working on it!)
+* Brought to Life by ChatGPT's Voice API :basecamp: (Working on it!)
 
 ## Flexible Interface
 
@@ -33,10 +33,15 @@ including:
 | ------------- | ------------- |
 | Rust       | https://www.rust-lang.org/learn/get-started               |
 | OpenAI API | https://platform.openai.com/docs/overview                 |
-| ElevenLabs |  https://elevenlabs.io/docs/api-reference/text-to-speech  |
+| OpenSSL |  https://www.openssl.org/  |
+| SQLITE3 |  https://www.sqlite.org/  |
+| Vulkan |  https://en.wikipedia.org/wiki/Vulkan  |
 
 
-1. Install Rust on your PC [rustup is recommended](https://rustup.rs/)
+**Note: During Compilation, Windows Antivirus May to Flag Certain Dependencies as Threats**
+**Note: WSL is Not a Supported Option as Vulkan is Necessary Backend (OpenGL May Be Implemented Later)**
+
+1. Install Rust on your PC [rustup is recommended](https://rustup.rs/) along with other dependencies (OpenSSL, SQLITE3, Vulkan)
 2. Create an [OpenAI](https://platform.openai.com/docs/overview) Account
    - Get an [OpenAI API Key](https://platform.openai.com/docs/guides/production-best-practices) and Add Credit to It
 3. Download the Senior Citizen Chatbot Repository and create the '.env' file in the test/openAI_sencit_test/ folder
@@ -67,6 +72,6 @@ Options:
 
 - [x] Database Backend
 - [x] GUI
-- [ ] ElevenLabs Voice Integration
-- [ ] Voice Input
+- [x] Voice Integration
+- [x] Voice Input
 - [ ] Portability

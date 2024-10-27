@@ -43,12 +43,9 @@ impl Display for Voices {
             Voices::Nova => write!(f, "Nova"),
             Voices::Shimmer => write!(f, "Shimmer"),
             Voices::None => write!(f, "None")
-
         }
     }
 }
-
-
 
 pub fn create_bot(user: &String) -> Vec<ChatCompletionMessage> {
     dotenv().unwrap();
@@ -112,7 +109,5 @@ pub async fn initiate_chat(user: &String) {
             &chat_results[15..],
         );
         bot_voice(format!("{}", &chat_results[15..]), Voices::Onyx).await;
-
-
     }
 }

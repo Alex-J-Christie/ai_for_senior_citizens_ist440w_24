@@ -17,6 +17,14 @@ use std::time::Duration;
 use tokio::task;
 use crate::chat::Voices;
 
+// pub struct Stttts {
+//     audio_in_path_name: String,
+//     audio_out_path_name: String,
+//     writer: Some(Arc<Mutex<BufWriter<File>>>),
+//
+// }
+
+
 //I have tried to get mp3 file duration for 40 minutes, we're just going to assume the response is never longer than like 20 seconds im done
 //never mind, doing that ruins everything so we need to get exact audio duration - i hate it here
 //i found a crate that just does it for me im a genius
@@ -75,10 +83,11 @@ pub async fn generate_audio(audio_in: String, voice: Voices) {
             headers.append("Content-Type: application/json").unwrap();
             easy.http_headers(headers).unwrap();
 
+            println!("{}", voice.to_string());
             let json_payload = json!({
                 "model": "tts-1",
                 "input": audio_in,
-                "voice": voice.to_string(),
+                "voice": voice.to_string().to_lowercase(),
             });
 
             let json_str = serde_json::to_string(&json_payload).unwrap();
@@ -96,10 +105,9 @@ pub async fn generate_audio(audio_in: String, voice: Voices) {
                 transfer.perform().unwrap();
             }
 
-            let response = easy.response_code().unwrap();
+            let response: u32 = easy.response_code().unwrap();
             match response {
                 200 => {
-                    // println!("Audio generated at output.mp3");
                     play_audio().await;
                 },
                 _ => println!("Error: {}", response)
@@ -155,7 +163,6 @@ pub fn transcribe(audio_in: PathBuf) -> String {
 //
 //haha, never mind
 //need to clean this up because right now im trying to cook with a kitchen floor covered in glass
-
 
 pub fn get_audio_input() -> Result<(), Error> {
     let host: Host = cpal::default_host();
