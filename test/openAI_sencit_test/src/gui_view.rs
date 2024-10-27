@@ -9,19 +9,20 @@ use iced::alignment::Vertical;
 use iced::alignment::Vertical::Center;
 use iced::font::Family;
 use iced::theme::palette::Pair;
+use iced::time::Duration as IcedDuration;
 use iced::widget::container::Style;
 use iced::widget::scrollable::{Rail, Scroller};
 use iced::widget::{button, container, horizontal_space, pick_list, scrollable, text, text_input, vertical_space, Column, Container, Image, Row, Scrollable, Slider, Text, TextInput};
 use iced::Background::Color as BackgroundColor;
 use iced::{border, Color, Element, Fill, FillPortion, Font, Pixels, Renderer, Size, Task, Theme};
 use openai::chat::ChatCompletionMessage;
+use serde::{Deserialize, Serialize};
 //standards and openai
 use std::fmt::{Display, Formatter};
 use std::fs::File;
-use std::io;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use serde::{Deserialize, Serialize};
+use std::io;
 
 pub fn main() -> iced::Result {
     iced::application(Chat::title, Chat::update, Chat::view)
@@ -29,7 +30,6 @@ pub fn main() -> iced::Result {
         .window_size(Size { width: 960.0, height: 960.0 })
         .run()
 }
-
 // #[derive(Default)]
 struct Chat {
     user: Option<String>,
@@ -39,7 +39,8 @@ struct Chat {
     logs: Vec<String>,
     settings: Settings,
     side_bar: bool,
-    recording: (bool, usize),
+    recording_time: u64,
+    recording: (bool, IcedDuration),
 }
 struct Settings {
     theme: Theme,
@@ -48,133 +49,6 @@ struct Settings {
     text_font: Fonts,
     text_family: Family,
 }
-
-#[derive(Serialize, Deserialize)]
-struct TempSettings {
-    theme: String,
-    voice: String,
-    text_size: f32,
-    text_font: String,
-    text_family: String,
-}
-fn save_settings(data: &Settings, file_path: &Path) -> io::Result<()> {
-
-    let out_data: TempSettings = TempSettings {
-        theme: match data.theme {
-            Theme::Light => {String::from("Light")}
-            Theme::Dark => {String::from("Dark")}
-            Theme::Dracula => {String::from("Dracula")}
-            Theme::Nord => {String::from("Nord")}
-            Theme::SolarizedLight => {String::from("SolarizedLight")}
-            Theme::SolarizedDark => {String::from("SolarizedDark")}
-            Theme::GruvboxLight => {String::from("GruvboxLight")}
-            Theme::GruvboxDark => {String::from("GruvboxDark")}
-            Theme::CatppuccinLatte => {String::from("CatppuccinLatte")}
-            Theme::CatppuccinFrappe => {String::from("CatppuccinFrappe")}
-            Theme::CatppuccinMacchiato => {String::from("CatppuccinMacchiato")}
-            Theme::CatppuccinMocha => {String::from("CatppuccinMocha")}
-            Theme::TokyoNight => {String::from("TokyoNight")}
-            Theme::TokyoNightStorm => {String::from("TokyoNightStorm")}
-            Theme::TokyoNightLight => {String::from("TokyoNightLight")}
-            Theme::KanagawaWave => {String::from("KanagawaWave")}
-            Theme::KanagawaDragon => {String::from("KanagawaDragon")}
-            Theme::KanagawaLotus => {String::from("KanagawaLotus")}
-            Theme::Moonfly => {String::from("Moonfly")}
-            Theme::Nightfly => {String::from("Nightfly")}
-            Theme::Oxocarbon => {String::from("Oxocarbon")}
-            Theme::Ferra => {String::from("Ferra")}
-            Theme::Custom(_) => {String::from("Custom")}
-        },
-        voice: match data.voice {
-            Voices::Alloy => {String::from("Alloy")}
-            Voices::Echo => {String::from("Echo")}
-            Voices::Fable => {String::from("Fable")}
-            Voices::Onyx => {String::from("Onyx")}
-            Voices::Nova => {String::from("Nova")}
-            Voices::Shimmer => {String::from("Shimmer")}
-            Voices::None => {String::from("None")}
-        },
-        text_size: data.text_size.0,
-        text_font: match data.text_font {
-            Serif => {String::from("Serif")}
-            Monospace => {String::from("Monospace")}
-        },
-        text_family: match data.text_family {
-            Family::Serif => {String::from("Serif")}
-            Family::SansSerif => {String::from("SansSerif")}
-            Family::Cursive => {String::from("Cursive")}
-            Family::Fantasy => {String::from("Fantasy")}
-            Family::Monospace => {String::from("Monospace")}
-            _ => {String::from("None")}
-        },
-    };
-
-    let toml: String = toml::to_string(&out_data).unwrap();
-    let mut file = File::create(file_path).unwrap();
-    file.write_all(toml.as_bytes()).unwrap();
-    Ok(())
-}
-//these are terrible and i feel bad that i wrote them - but i need to sleep at some point
-fn read_settings(file_path: &Path) -> io::Result<Settings> {
-    let mut file = File::open(file_path).unwrap();
-    let mut content = String::new();
-    file.read_to_string(&mut content).unwrap();
-    let out_settings: TempSettings = toml::from_str(&content).unwrap();
-    let settings: Settings = Settings {
-        theme: match out_settings.theme.as_str() {
-            "Light" => {Theme::Light}
-            "Dark" => {Theme::Dark}
-            "Dracula" => {Theme::Dracula}
-            "Nord" => {Theme::Nord}
-            "SolarizedLight" => {Theme::SolarizedLight}
-            "SolarizedDark" => {Theme::SolarizedDark}
-            "GruvboxLight" => {Theme::GruvboxLight}
-            "GruvboxDark" => {Theme::GruvboxDark}
-            "CatppuccinLatte" => {Theme::CatppuccinLatte}
-            "CatppuccinFrappe" => {Theme::CatppuccinFrappe}
-            "CatppuccinMacchiato" => {Theme::CatppuccinMacchiato}
-            "CatppuccinMocha" => {Theme::CatppuccinMocha}
-            "TokyoNight" => {Theme::TokyoNight}
-            "TokyoNightStorm" => {Theme::TokyoNightStorm}
-            "TokyoNightLight" => {Theme::TokyoNightLight}
-            "KanagawaWave" => {Theme::KanagawaWave}
-            "KanagawaDragon" => {Theme::KanagawaDragon}
-            "KanagawaLotus" => {Theme::KanagawaLotus}
-            "Moonfly" => {Theme::Moonfly}
-            "Nightfly" => {Theme::Nightfly}
-            "Oxocarbon" => {Theme::Oxocarbon}
-            "Ferra" => {Theme::Ferra}
-            _ => {Theme::GruvboxDark}
-        },
-        voice: match out_settings.voice.as_str() {
-            "Alloy" => {Voices::Alloy}
-            "Echo" => {Voices::Echo}
-            "Fable" => {Voices::Fable}
-            "Onyx" => {Voices::Onyx}
-            "Nova" => {Voices::Nova}
-            "Shimmer" => {Voices::Shimmer}
-            "None" => {Voices::None}
-            &_ => {todo!()}
-        },
-        text_size: Pixels(out_settings.text_size),
-        text_font: match out_settings.text_font.as_str() {
-            "Serif" => {Serif}
-            "Monospace" => {Monospace}
-            &_ => {todo!()}
-        },
-        text_family: match out_settings.text_family.as_str() {
-            "Serif" => {Family::Serif}
-            "SansSerif" => {Family::SansSerif}
-            "Cursive" => {Family::Cursive}
-            "Fantasy" => {Family::Fantasy}
-            "Monospace" => {Family::Monospace}
-            _ => {Family::Serif}
-        },
-    };
-
-    Ok(settings)
-}
-
 #[derive(Debug, Clone)]
 enum Message {
     TextChanged(String),
@@ -188,11 +62,12 @@ enum Message {
     TextFontChanged(Fonts),
     BotResponse(String),
     BotVoice,
+    RecordingTimeChanged(u64),
     StartMic,
+    Tick,
     SideBarChanged,
     SettingsSaved,
 }
-
 impl Default for Chat {
     fn default() -> Self {
         Chat {
@@ -213,11 +88,11 @@ impl Default for Chat {
                 }
             },
             side_bar: true,
-            recording: (false, 10),
+            recording_time: 10,
+            recording: (false, IcedDuration::from_secs(10)),
         }
     }
 }
-
 impl Chat {
     fn title(&self) -> String {
         String::from("Senior Citizen AI Chatbot Test")
@@ -302,7 +177,7 @@ impl Chat {
                 Task::none()
             }
             Message::BotResponse(response) => {
-                self.recording = (false, 10);
+                self.recording = (false, IcedDuration::from_secs(10));
                 let print_line: String = response.to_string()[15..].parse().unwrap();
                 self.logs.push(format!("Assistant: {}\n", print_line));
                 let voice: Voices = self.settings.voice.clone();
@@ -333,9 +208,26 @@ impl Chat {
             Message::BotVoice => {
                 Task::none()
             }
+            Message::RecordingTimeChanged(time) => {
+                self.recording_time = time;
+                Task::none()
+            }
             Message::StartMic => {
-                self.recording.0 = true;
-                get_audio_input().expect("Could not find usable mic or sample rate issue");
+                //todo! get timer popup working - right now a visual response in the chat screen should be enough
+                let user_warning: String = String::from("Starting Mic");
+                let bot_warning: String = format!("Assistant: Now Recording - You Have {} seconds to speak", self.recording_time);
+                self.logs.push(user_warning);
+                self.logs.push(bot_warning);
+
+                Task::perform(async move {
+                    //I have never 'if it works it works'ed more than I have now
+                    Self::add_warning()
+                }, |()| {
+                    Message::Tick
+                })
+            }
+            Message::Tick => {
+                get_audio_input(self.recording_time).expect("Could not find usable mic or sample rate issue");
                 let response = transcribe(PathBuf::from("output.wav"));
                 if Path::new("output.wav").exists() {
                     self.logs.push(format!("{}: {}\n", self.user.clone().unwrap(), response));
@@ -364,6 +256,11 @@ impl Chat {
     async fn play_bot_voice(input_text: String, voice: Voices) {
         bot_voice(input_text, voice).await
     }
+    #[tokio::main]
+    async fn add_warning() {
+        println!("Warning: {}", String::from("This is a load bearing print"));
+    }
+
     fn theme(&self) -> Theme {
         self.settings.theme.clone()
     }
@@ -392,6 +289,13 @@ impl Chat {
             .on_press(Message::SideBarChanged)
             .padding(10)
             .style(button_theme.clone());
+
+        let time_list: Column<'_, Message> = Column::new()
+            .push(text(format!("Choose Recording Time: {}", self.recording_time)))
+            .push(Slider::new(5..=30, self.recording_time as u16, |value| Message::RecordingTimeChanged(value as u64))
+                .step(5u16)
+            )
+            .padding(20);
 
         let theme_list: Column<'_, Message> = Column::new()
             .push(text("Choose Theme"))
@@ -461,9 +365,11 @@ impl Chat {
                         .push(theme_list)
                         .push(voice_list)
                         .push(text_size_slider)
+                        .push(time_list)
                         .push(fonts_list)
                         .push(settings_save_button)
                         .push(logout_button)
+                        .push(text(self.recording.1.as_secs().to_string()))
                         .push(
                             Column::new()
                                 .push(vertical_space())
@@ -610,7 +516,7 @@ impl Chat {
     }
     fn recording_popup(&self) -> Container<'_, Message> {
 
-        let signpost_container: Container<'_, Message> = container(text(format!("Recording: {} Seconds Remaining", self.recording.1)))
+        let signpost_container: Container<'_, Message> = container(text(format!("Recording: {} Seconds Remaining", self.recording.1.as_secs())))
             .center_x(Fill)
             .padding(10);
 
@@ -755,3 +661,129 @@ impl Fonts {
 //     OpenSans => read("fonts/Open_Sans/static/OpenSans-Medium.ttf"),
 //     Roboto => read("fonts/Roboto/Roboto-Regular.ttf"),
 //     CedarvilleCursive => read("fonts/Cedarville_Cursive/CedarvilleCursive-Regular.ttf"),
+
+#[derive(Serialize, Deserialize)]
+struct TempSettings {
+    theme: String,
+    voice: String,
+    text_size: f32,
+    text_font: String,
+    text_family: String,
+}
+fn save_settings(data: &Settings, file_path: &Path) -> io::Result<()> {
+
+    let out_data: TempSettings = TempSettings {
+        theme: match data.theme {
+            Theme::Light => {String::from("Light")}
+            Theme::Dark => {String::from("Dark")}
+            Theme::Dracula => {String::from("Dracula")}
+            Theme::Nord => {String::from("Nord")}
+            Theme::SolarizedLight => {String::from("SolarizedLight")}
+            Theme::SolarizedDark => {String::from("SolarizedDark")}
+            Theme::GruvboxLight => {String::from("GruvboxLight")}
+            Theme::GruvboxDark => {String::from("GruvboxDark")}
+            Theme::CatppuccinLatte => {String::from("CatppuccinLatte")}
+            Theme::CatppuccinFrappe => {String::from("CatppuccinFrappe")}
+            Theme::CatppuccinMacchiato => {String::from("CatppuccinMacchiato")}
+            Theme::CatppuccinMocha => {String::from("CatppuccinMocha")}
+            Theme::TokyoNight => {String::from("TokyoNight")}
+            Theme::TokyoNightStorm => {String::from("TokyoNightStorm")}
+            Theme::TokyoNightLight => {String::from("TokyoNightLight")}
+            Theme::KanagawaWave => {String::from("KanagawaWave")}
+            Theme::KanagawaDragon => {String::from("KanagawaDragon")}
+            Theme::KanagawaLotus => {String::from("KanagawaLotus")}
+            Theme::Moonfly => {String::from("Moonfly")}
+            Theme::Nightfly => {String::from("Nightfly")}
+            Theme::Oxocarbon => {String::from("Oxocarbon")}
+            Theme::Ferra => {String::from("Ferra")}
+            Theme::Custom(_) => {String::from("Custom")}
+        },
+        voice: match data.voice {
+            Voices::Alloy => {String::from("Alloy")}
+            Voices::Echo => {String::from("Echo")}
+            Voices::Fable => {String::from("Fable")}
+            Voices::Onyx => {String::from("Onyx")}
+            Voices::Nova => {String::from("Nova")}
+            Voices::Shimmer => {String::from("Shimmer")}
+            Voices::None => {String::from("None")}
+        },
+        text_size: data.text_size.0,
+        text_font: match data.text_font {
+            Serif => {String::from("Serif")}
+            Monospace => {String::from("Monospace")}
+        },
+        text_family: match data.text_family {
+            Family::Serif => {String::from("Serif")}
+            Family::SansSerif => {String::from("SansSerif")}
+            Family::Cursive => {String::from("Cursive")}
+            Family::Fantasy => {String::from("Fantasy")}
+            Family::Monospace => {String::from("Monospace")}
+            _ => {String::from("None")}
+        },
+    };
+
+    let toml: String = toml::to_string(&out_data).unwrap();
+    let mut file = File::create(file_path).unwrap();
+    file.write_all(toml.as_bytes()).unwrap();
+    Ok(())
+}
+//these are terrible and i feel bad that i wrote them - but i need to sleep at some point
+fn read_settings(file_path: &Path) -> io::Result<Settings> {
+    let mut file = File::open(file_path).unwrap();
+    let mut content = String::new();
+    file.read_to_string(&mut content).unwrap();
+    let out_settings: TempSettings = toml::from_str(&content).unwrap();
+    let settings: Settings = Settings {
+        theme: match out_settings.theme.as_str() {
+            "Light" => {Theme::Light}
+            "Dark" => {Theme::Dark}
+            "Dracula" => {Theme::Dracula}
+            "Nord" => {Theme::Nord}
+            "SolarizedLight" => {Theme::SolarizedLight}
+            "SolarizedDark" => {Theme::SolarizedDark}
+            "GruvboxLight" => {Theme::GruvboxLight}
+            "GruvboxDark" => {Theme::GruvboxDark}
+            "CatppuccinLatte" => {Theme::CatppuccinLatte}
+            "CatppuccinFrappe" => {Theme::CatppuccinFrappe}
+            "CatppuccinMacchiato" => {Theme::CatppuccinMacchiato}
+            "CatppuccinMocha" => {Theme::CatppuccinMocha}
+            "TokyoNight" => {Theme::TokyoNight}
+            "TokyoNightStorm" => {Theme::TokyoNightStorm}
+            "TokyoNightLight" => {Theme::TokyoNightLight}
+            "KanagawaWave" => {Theme::KanagawaWave}
+            "KanagawaDragon" => {Theme::KanagawaDragon}
+            "KanagawaLotus" => {Theme::KanagawaLotus}
+            "Moonfly" => {Theme::Moonfly}
+            "Nightfly" => {Theme::Nightfly}
+            "Oxocarbon" => {Theme::Oxocarbon}
+            "Ferra" => {Theme::Ferra}
+            _ => {Theme::GruvboxDark}
+        },
+        voice: match out_settings.voice.as_str() {
+            "Alloy" => {Voices::Alloy}
+            "Echo" => {Voices::Echo}
+            "Fable" => {Voices::Fable}
+            "Onyx" => {Voices::Onyx}
+            "Nova" => {Voices::Nova}
+            "Shimmer" => {Voices::Shimmer}
+            "None" => {Voices::None}
+            &_ => {todo!()}
+        },
+        text_size: Pixels(out_settings.text_size),
+        text_font: match out_settings.text_font.as_str() {
+            "Serif" => {Serif}
+            "Monospace" => {Monospace}
+            &_ => {todo!()}
+        },
+        text_family: match out_settings.text_family.as_str() {
+            "Serif" => {Family::Serif}
+            "SansSerif" => {Family::SansSerif}
+            "Cursive" => {Family::Cursive}
+            "Fantasy" => {Family::Fantasy}
+            "Monospace" => {Family::Monospace}
+            _ => {Family::Serif}
+        },
+    };
+
+    Ok(settings)
+}

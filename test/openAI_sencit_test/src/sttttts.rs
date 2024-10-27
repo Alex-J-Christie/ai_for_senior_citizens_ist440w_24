@@ -162,9 +162,9 @@ pub fn transcribe(audio_in: PathBuf) -> String {
 //its 1 am im just gonna look for a different library tomorrow
 //
 //haha, never mind
-//need to clean this up because right now im trying to cook with a kitchen floor covered in glass
+//need to clean this up because right now any bug threatens me with an hour-long game of hide and seek
 
-pub fn get_audio_input() -> Result<(), Error> {
+pub fn get_audio_input(time: u64) -> Result<(), Error>{
     let host: Host = cpal::default_host();
     let device: Device = host.default_input_device().expect("failed to get default output device");
     let config: SupportedStreamConfig = device.default_input_config().unwrap();
@@ -218,7 +218,11 @@ pub fn get_audio_input() -> Result<(), Error> {
 
     stream.play().unwrap();
 
-    std::thread::sleep(Duration::from_secs(10));
+    std::thread::sleep(Duration::from_secs(time));
+    Ok(stream_stop_drop(stream, writer).expect("Failed to Handle Thread LOC"))
+}
+
+fn stream_stop_drop(stream: Stream, writer: Arc<Mutex<Option<WavWriter<BufWriter<File>>>>>) -> Result<(), Error> {
     drop(stream);
     writer
         .lock().unwrap()
