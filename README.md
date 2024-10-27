@@ -10,7 +10,7 @@ This project uses powerful technology to create a fully featured, comprehensive 
 
 * Written in Rust :crab:
 * Powered by OpenAI :robot:
-* Brought to Life by ChatGPT's Voice API :basecamp: (Working on it!)
+* Brought to Life by ChatGPT's Voice API :basecamp:
 
 ## Flexible Interface
 
@@ -39,7 +39,8 @@ including:
 
 
 **Note: During Compilation, Windows Antivirus May to Flag Certain Dependencies as Threats**
-**Note: WSL is Not a Supported Option as Vulkan is Necessary Backend (OpenGL May Be Implemented Later)**
+
+**Note: WSL is Not a Supported Option as Vulkan is the Necessary Backend (OpenGL May Be Implemented Later)**
 
 1. Install Rust on your PC [rustup is recommended](https://rustup.rs/) along with other dependencies (OpenSSL, SQLITE3, Vulkan)
 2. Create an [OpenAI](https://platform.openai.com/docs/overview) Account
