@@ -6,7 +6,7 @@ edition = "2021"
 [dependencies]
 dotenvy = "0.15.7"
 openai = "1.0.0-alpha.16"
-rusqlite = "0.32.1"
+rusqlite = { version="0.32.1", features = ["bundled"] }
 tokio = { version = "1.40.0", features = ["rt", "rt-multi-thread", "macros"] }
 clap = { version = "4.5.18", features = ["cargo", "derive"] }
 directories = "5.0.1"

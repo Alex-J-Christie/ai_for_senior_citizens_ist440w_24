@@ -260,7 +260,6 @@ impl Chat {
     async fn add_warning() {
         println!("Warning: {}", String::from("This is a load bearing print"));
     }
-
     fn theme(&self) -> Theme {
         self.settings.theme.clone()
     }
@@ -662,6 +661,7 @@ impl Fonts {
 //     Roboto => read("fonts/Roboto/Roboto-Regular.ttf"),
 //     CedarvilleCursive => read("fonts/Cedarville_Cursive/CedarvilleCursive-Regular.ttf"),
 
+//these are terrible and i feel bad that i wrote them - but i need to sleep at some point
 #[derive(Serialize, Deserialize)]
 struct TempSettings {
     theme: String,
@@ -671,7 +671,6 @@ struct TempSettings {
     text_family: String,
 }
 fn save_settings(data: &Settings, file_path: &Path) -> io::Result<()> {
-
     let out_data: TempSettings = TempSettings {
         theme: match data.theme {
             Theme::Light => {String::from("Light")}
@@ -721,13 +720,11 @@ fn save_settings(data: &Settings, file_path: &Path) -> io::Result<()> {
             _ => {String::from("None")}
         },
     };
-
     let toml: String = toml::to_string(&out_data).unwrap();
     let mut file = File::create(file_path).unwrap();
     file.write_all(toml.as_bytes()).unwrap();
     Ok(())
 }
-//these are terrible and i feel bad that i wrote them - but i need to sleep at some point
 fn read_settings(file_path: &Path) -> io::Result<Settings> {
     let mut file = File::open(file_path).unwrap();
     let mut content = String::new();
