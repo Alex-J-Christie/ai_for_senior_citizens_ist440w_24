@@ -1,12 +1,15 @@
 use anyhow::Error;
+
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Device, FromSample, Host, Sample, Stream, StreamError, SupportedStreamConfig};
-use curl::easy::{Easy, List};
+
+use curl::easy::{Easy, List, Transfer};
 use dotenvy::dotenv;
 use hound::{SampleFormat, WavSpec, WavWriter};
 use mp3_duration;
 use rodio::{Decoder, OutputStream, OutputStreamHandle, Source};
 use serde_json::{json, Value};
+
 use std::env;
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Write};
@@ -14,7 +17,9 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+
 use tokio::task;
+
 use crate::chat::Voices;
 
 // pub struct Stttts {
@@ -73,32 +78,32 @@ pub async fn generate_audio(audio_in: String, voice: Voices) {
         _ => {
             dotenv().unwrap();
             let api_key: String = env::var("OPENAI_KEY").unwrap();
-            let mut easy = Easy::new();
+            let mut easy: Easy = Easy::new();
 
             easy.url("https://api.openai.com/v1/audio/speech").unwrap();
             easy.post(true).unwrap();
 
-            let mut headers = List::new();
+            let mut headers: List = List::new();
             headers.append(&format!("Authorization: Bearer {}", api_key)).unwrap();
             headers.append("Content-Type: application/json").unwrap();
             easy.http_headers(headers).unwrap();
 
             println!("{}", voice.to_string());
-            let json_payload = json!({
+            let json_payload: Value = json!({
                 "model": "tts-1",
                 "input": audio_in,
                 "voice": voice.to_string().to_lowercase(),
             });
 
-            let json_str = serde_json::to_string(&json_payload).unwrap();
+            let json_str: String = serde_json::to_string(&json_payload).unwrap();
 
             easy.post_fields_copy(json_str.as_bytes()).unwrap();
 
-            let mut output_file = File::create("output.mp3").unwrap();
+            let mut output_file: File = File::create("output.mp3").unwrap();
 
             {
-                let mut transfer = easy.transfer();
-                transfer.write_function(|data| {
+                let mut transfer: Transfer = easy.transfer();
+                transfer.write_function(|data: &[u8]| {
                     output_file.write_all(data).unwrap();
                     Ok(data.len())
                 }).unwrap();

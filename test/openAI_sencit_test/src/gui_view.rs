@@ -5,6 +5,7 @@ use crate::sttttts::{get_audio_input, transcribe};
 //chat.rs methods
 use chat::Voices;
 use chat::{create_bot, get_bot_response};
+//iced items
 use iced::alignment::Vertical;
 use iced::alignment::Vertical::Center;
 use iced::font::Family;
@@ -12,12 +13,12 @@ use iced::theme::palette::Pair;
 use iced::time::Duration as IcedDuration;
 use iced::widget::container::Style;
 use iced::widget::scrollable::{Rail, Scroller};
-use iced::widget::{button, container, horizontal_space, pick_list, scrollable, text, text_input, vertical_space, Column, Container, Image, Row, Scrollable, Slider, Text, TextInput};
+use iced::widget::{button, container, horizontal_space, pick_list, scrollable, text, text_input, vertical_space, Button, Column, Container, Image, Row, Scrollable, Slider, Text, TextInput};
 use iced::Background::Color as BackgroundColor;
 use iced::{border, Color, Element, Fill, FillPortion, Font, Pixels, Renderer, Size, Task, Theme};
+//standards and openai
 use openai::chat::ChatCompletionMessage;
 use serde::{Deserialize, Serialize};
-//standards and openai
 use std::fmt::{Display, Formatter};
 use std::fs::File;
 use std::io::{Read, Write};
@@ -67,6 +68,7 @@ enum Message {
     Tick,
     SideBarChanged,
     SettingsSaved,
+    IntroButton(String),
 }
 impl Default for Chat {
     fn default() -> Self {
@@ -246,6 +248,18 @@ impl Chat {
                 save_settings(&self.settings, Path::new("settings.toml")).expect("Cannot write to file");
                 Task::none()
             }
+            Message::IntroButton(topic) => {
+                self.logs.push(format!("{}: {}\n", self.user.clone().unwrap(), topic));
+                let user_text: String = self.user_text.clone();
+                let content: String = topic.clone();
+                let bot: Vec<ChatCompletionMessage> = self.bot.clone();
+
+                Task::perform(async move {
+                    Self::fetch_bot_response(bot, content, user_text)
+                }, |response| {
+                    Message::BotResponse(response)
+                })
+            }
         }
     }
     #[tokio::main]
@@ -401,7 +415,7 @@ impl Chat {
             }
         };
 
-        let scrollable_content: Column<'_, Message> = Column::new()
+        let intro_column: Column<'_, Message> = Column::new()
             .push(border_background(-1, text("Welcome to Your AI Companion! Enter Your Name to Chat!")
                 .size(Pixels::from(self.settings.text_size.0))
                 .font(Font {
@@ -421,6 +435,29 @@ impl Chat {
                     })
                 ).into()
             )));
+
+        let intro_buttons: Column<'_, Message> = Column::new()
+            .push(Button::new("Show me a new Recipe")
+                .on_press(Message::IntroButton(String::from("Show me a new Recipe")))
+                .padding(5))
+            .push(Button::new("Give me a fun fact")
+                .on_press(Message::IntroButton(String::from("Give me a fun fact")))
+                .padding(5))
+            .push(Button::new("Tell me a joke")
+                .on_press(Message::IntroButton(String::from("Tell me a joke")))
+                .padding(5));
+
+        let scrollable_content: Column<'_, Message> = match self.logs.last() {
+            None => {intro_column}
+            Some(value) => {
+                if value.contains("Welcome to the Chatbot Experience") {
+                        intro_column
+                            .push(intro_buttons.spacing(5))
+                } else {
+                        intro_column
+                }
+            }
+        };
 
         let out_field: Scrollable<'_, Message> = scrollable(scrollable_content)
             .width(Fill)

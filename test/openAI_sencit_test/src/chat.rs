@@ -53,7 +53,7 @@ pub fn create_bot(user: &String) -> Vec<ChatCompletionMessage> {
     set_base_url(env::var("OPENAI_BASE_URL").unwrap_or_default());
     let messages: Vec<ChatCompletionMessage> = vec![ChatCompletionMessage {
         role: ChatCompletionMessageRole::System,
-        content: Some(get_prompt(user)),
+        content: Some(get_prompt(user, &String::from("Assistant"))),
         name: None,
         function_call: None,
     }];
@@ -82,7 +82,7 @@ pub async fn get_bot_response(messages: &mut Vec<ChatCompletionMessage>, user_me
         .split_off(admin_answer.find("Reply to User: ")
         .unwrap());
 
-    add_prompt_user_info(user.to_owned(), &admin_answer[16..]);
+    add_prompt_user_info(&user.to_owned(), String::from("Assistant"), &admin_answer[16..]);
     messages.push(returned_message);
 
     user_answer
