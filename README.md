@@ -50,7 +50,7 @@ including:
 4. In the same directory as your selected KiYa binary, create a text file name '.env.'
 5. In a text editor, open the '.env' file and type 'OPENAI_KEY=XX-proj-XX' (replace XX-proj-XX with your project key)
 6. Create a application shortcut that points to the binary
-    - Alternatively, run binary directly in terminal ('start KiYa.exe' for windows, 'sudo ./KiYa' or 'sudo sh KiYa' on linux (may need to chmod +x first))
+    - Alternatively, run binary directly in terminal ('start KiYa.exe -h' for windows, './KiYa -h' or 'sh KiYa -h' on linux (may need to chmod +x first))
 8. add '-g' as a launch parameter
 9. run the shortcut
 
