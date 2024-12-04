@@ -1,9 +1,7 @@
 use crate::chat::initiate_chat;
 use crate::db_man::test;
-use crate::gui_view;
-use crate::sttttts::transcribe;
+use crate::{gui_view, sttttts};
 use clap::{arg, command, Arg, ArgMatches};
-use std::path::PathBuf;
 
 pub fn run_args(args: ArgMatches) {
         if let Some(a) = args.get_one::<String>("sign_in") {
@@ -21,12 +19,18 @@ pub fn run_args(args: ArgMatches) {
         }
         if let Some(d) = args.get_one::<bool>("test_tts") {
             if *d {
-                println!("{}", "Test TTS");
-                // let audio: PathBuf = PathBuf::from("test-mic.wav");
-                // sttttts::transcribe(audio);
-                // sttttts::generate_audio(String::from("Whoa, that's really good Jason!"), String::from("alloy"));
-                // get_audio_input().expect("Failed to find mic");
-                println!("response: {}", transcribe(PathBuf::from("output.wav")));
+                // println!("{}", "Test TTS");
+                // // let audio: PathBuf = PathBuf::from("test-mic.wav");
+                // // sttttts::transcribe(audio);
+                // // sttttts::generate_audio(String::from("Whoa, that's really good Jason!"), String::from("alloy"));
+                // // get_audio_input().expect("Failed to find mic");
+                // println!("response: {}", transcribe(PathBuf::from("output.wav")));
+                for device in sttttts::get_input_devices().1 {
+                    println!("{}", device);
+                }
+
+
+
             }
         }
     }

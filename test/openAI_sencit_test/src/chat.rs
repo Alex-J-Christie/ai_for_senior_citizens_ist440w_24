@@ -47,24 +47,23 @@ impl Display for Voices {
     }
 }
 
-pub fn create_bot(user: &String) -> Vec<ChatCompletionMessage> {
+pub fn create_bot(user: &String, assistant: &String) -> Vec<ChatCompletionMessage> {
     dotenv().unwrap();
     set_key(env::var("OPENAI_KEY").unwrap());
     set_base_url(env::var("OPENAI_BASE_URL").unwrap_or_default());
     let messages: Vec<ChatCompletionMessage> = vec![ChatCompletionMessage {
         role: ChatCompletionMessageRole::System,
-        content: Some(get_prompt(user, &String::from("Assistant"))),
+        content: Some(get_prompt(user, assistant)),
         name: None,
         function_call: None,
     }];
     messages
 }
-
-pub async fn get_bot_response(messages: &mut Vec<ChatCompletionMessage>, user_message_content: String, user: &str) -> String {
+pub async fn get_bot_response(messages: &mut Vec<ChatCompletionMessage>, user_message_content: String, user: &str, assistant: String) -> Vec<ChatCompletionMessage> {
     messages.push(ChatCompletionMessage {
         role: ChatCompletionMessageRole::User,
         content: Some(user_message_content),
-        name: None,
+        name: Some(user.to_string()),
         function_call: None,//pipe function in to pass content results into database for persistence. Consider parsing manually to save space.
     });
 
@@ -78,14 +77,15 @@ pub async fn get_bot_response(messages: &mut Vec<ChatCompletionMessage>, user_me
         .content
         .clone()
         .unwrap();
-    let user_answer: String = admin_answer
+    let _user_answer: String = admin_answer
         .split_off(admin_answer.find("Reply to User: ")
         .unwrap());
 
-    add_prompt_user_info(&user.to_owned(), String::from("Assistant"), &admin_answer[16..]);
+    add_prompt_user_info(&user.to_owned(), assistant, &admin_answer[16..]);
     messages.push(returned_message);
 
-    user_answer
+    //for the record, I don't like this change because it makes gui and cli more complex than necessary but im struggling to solve this problem any other way so we're just returning the entire chat
+    messages.clone()
 }
 
 pub async fn bot_voice(voice_line: String, voice: Voices) {
@@ -94,7 +94,7 @@ pub async fn bot_voice(voice_line: String, voice: Voices) {
 
 #[tokio::main]
 pub async fn initiate_chat(user: &String) {
-    let mut messages: Vec<ChatCompletionMessage> = create_bot(user);
+    let mut messages: Vec<ChatCompletionMessage> = create_bot(user, &String::from("Assistant"));
     loop {
         print!("{}: ", user);
         stdout().flush().unwrap();
@@ -102,12 +102,13 @@ pub async fn initiate_chat(user: &String) {
         let mut user_message_content: String = String::new();
 
         stdin().read_line(&mut user_message_content).unwrap();
-        let chat_results: String = get_bot_response(&mut messages, user_message_content, user).await;
+        let chat_results: Vec<ChatCompletionMessage> = get_bot_response(&mut messages, user_message_content, user, String::from("Assistant")).await;
+        let chat_response: String = chat_results.last().unwrap().content.clone().unwrap()[50..].parse().unwrap();
 
         println!(
             "Assistant: {}",
-            &chat_results[15..],
+            &chat_response[15..],
         );
-        bot_voice(format!("{}", &chat_results[15..]), Voices::Onyx).await;
+        bot_voice(chat_response[15..].to_string(), Voices::Onyx).await;
     }
 }

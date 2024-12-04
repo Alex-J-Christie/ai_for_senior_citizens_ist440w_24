@@ -2,7 +2,7 @@ use std::env;
 use rusqlite::{Connection, params, Rows, Statement};
 use std::path::{PathBuf};
 use directories::UserDirs;
-
+// KiYa AI (Kidemli Yardımcı)
 // #[derive(Debug)]
 // struct User {
 //     username: String,
@@ -68,10 +68,9 @@ fn check_base_tables() {
 fn add_user(user_name: &String) {
     check_base_tables();
     let conn = instance_conn();
-    let user_id: i32;
     conn.execute("insert or ignore into Users (User_Name) values(?1)",params![user_name])
         .expect("**failed to add new user in add_user()**\n");
-    user_id = get_user_id(user_name);
+    let user_id = get_user_id(user_name);
     conn.execute("insert or ignore into Assistants (assistant_name, user_id) values('Assistant', ?1)",params![user_id]).expect("**failed to add new assistant in add_user()**\n");
 }
 fn check_for_user(user_name: &String) -> bool {
@@ -85,7 +84,7 @@ fn check_for_user(user_name: &String) -> bool {
         names.push(row.get(0).unwrap());
     }
 
-    names.contains(&user_name)
+    names.contains(user_name)
 }
 fn get_user_id(user_name: &String) -> i32 {
     check_base_tables();
@@ -98,12 +97,12 @@ fn get_user_id(user_name: &String) -> i32 {
     }
     user_id
 }
-fn get_assistants(user_name: &String) -> Vec<String> {
+pub fn get_assistants(user_name: &String) -> Vec<String> {
     check_base_tables();
     let conn: Connection = instance_conn();
     let mut assistants: Vec<String> = Vec::new();
     let mut stmt = conn.prepare("select assistant_name from Assistants where user_id = ?1").unwrap();
-    let mut rows: Rows = stmt.query(params![get_user_id(&user_name)]).unwrap();
+    let mut rows: Rows = stmt.query(params![get_user_id(user_name)]).unwrap();
     while let Some(row) = rows.next().unwrap() {
         assistants.push(row.get(0).unwrap());
     }
@@ -127,15 +126,16 @@ pub fn add_prompt_user_info(user_name: &String, assistant_name: String, new_info
     let assistant_id: i32 = get_assistant_id(user_name, assistant_name);
     match conn.execute("insert into Info (info, assistant_id) values (?1, ?2)",params![new_info, assistant_id]) {
         Ok(_) => print!(""),
-        Err(err) => println!("Add Prompt User Info Error: {:?}", err),
+        Err(err) => { if !new_info.contains("No relevant") {
+            println!("Add Prompt User Info Error: {:?}, info: {}", err, new_info)
+        }},
     }
 }
 pub fn get_prompt_info(user_name: &String, assistant_name: &String) -> Vec<String> {
     check_base_tables();
     let conn: Connection = instance_conn();
     let mut user_info: Vec<String> = Vec::new();
-    let assistant_id: i32 = get_assistant_id(user_name.into(), assistant_name.to_string());
-
+    let assistant_id: i32 = get_assistant_id(user_name, assistant_name.to_string());
     let mut stmt: Statement = conn.prepare("select info from Info where assistant_id = ?1").unwrap();
     let mut rows: Rows = stmt.query(params![assistant_id]).unwrap();
 
@@ -146,19 +146,18 @@ pub fn get_prompt_info(user_name: &String, assistant_name: &String) -> Vec<Strin
 }
 pub fn get_prompt(user_name: &String, assistant_name: &String) -> String {
     check_base_tables();
-    add_user(&user_name);
+    add_user(user_name);
     let info: String = get_prompt_info(user_name, assistant_name)
         .join(", ");
-    format!("You are a chatbot designed to help older people deal with the isolation that comes from loneliness, difficulties handling the troubles of aging and various neurological disorders like dementia by being a warm, helpful companion. In order to maintain persistence between sessions you will give two answers to each response. The first answer will tell the backend admin what information you believe to be relevant for ongoing sessions. If there is no such information, or the information is already within the original prompt, do NOT provide any text. Do not add a newline at the end of replies. Only include information that would be relevant across sessions, like favorite activities or family members names. If there is no relevant information - use the text \"Reply to Admin: No relevant information provided.\" The second answer will be a response to a specific user following the overall guidelines. Be kind, gentle, and helpful to them. Today you are helping: {{User: {}, Info: {}}}. Format your responses like below, Reply to Admin: {{first response goes here}}, Reply to User: {{Second response goes here}}", user_name, info)
+    format!("You are a chatbot designed to help older people deal with the isolation that comes from loneliness, difficulties handling the troubles of aging and various neurological disorders like dementia by being a warm, helpful companion. In order to maintain persistence between sessions you will give two answers to each response. The first answer will tell the backend admin what information you believe to be relevant for ongoing sessions. If there is no such information, or the information is already within the original prompt, do NOT provide any text. Do not add a newline at the end of replies. Only include information that would be relevant across sessions, (for example: favorite activities, family members names, preferred session settings like languages or preferred names). If there is no relevant information - use the text \"Reply to Admin: No relevant information provided.\" The second answer will be a response to a specific user following the overall guidelines. Be kind, gentle, and helpful to them. Today you are helping: {{User: {}, Info: {}}}. Format your responses like below, Reply to Admin: {{first response goes here}}, Reply to User: {{Second response goes here}}", user_name, info)
 }
-fn add_assistant(user_name: &String, assistant_name: &String) {
+pub fn add_assistant(user_name: &String, assistant_name: &String) {
     check_base_tables();
     let conn: Connection = instance_conn();
-    match conn.execute("insert into Assistants (assistant_name, user_id) values (?1, ?2)", params![assistant_name, get_user_id(&user_name)]) {
+    match conn.execute("insert into Assistants (assistant_name, user_id) values (?1, ?2)", params![assistant_name, get_user_id(user_name)]) {
         Ok(updated) => println!("Assistants updated: {}", updated),
         Err(err) => println!("Add Assistant Error: {}", err),
     }
-
 }
 pub fn test(){
     let user: String = String::from("dorothy");

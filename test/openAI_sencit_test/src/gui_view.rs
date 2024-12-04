@@ -1,7 +1,7 @@
-use crate::chat;
+use crate::{chat, db_man};
 use crate::chat::bot_voice;
 use crate::gui_view::Fonts::{Monospace, Serif};
-use crate::sttttts::{get_audio_input, transcribe};
+use crate::sttttts::{get_audio_input, get_default_audio_input, transcribe, get_input_devices};
 //chat.rs methods
 use chat::Voices;
 use chat::{create_bot, get_bot_response};
@@ -15,7 +15,7 @@ use iced::widget::container::Style;
 use iced::widget::scrollable::{Rail, Scroller};
 use iced::widget::{button, container, horizontal_space, pick_list, scrollable, text, text_input, vertical_space, Button, Column, Container, Image, Row, Scrollable, Slider, Text, TextInput};
 use iced::Background::Color as BackgroundColor;
-use iced::{border, Color, Element, Fill, FillPortion, Font, Pixels, Renderer, Size, Task, Theme};
+use iced::{border, Alignment, Color, Element, Fill, FillPortion, Font, Pixels, Renderer, Size, Task, Theme};
 //standards and openai
 use openai::chat::ChatCompletionMessage;
 use serde::{Deserialize, Serialize};
@@ -24,6 +24,9 @@ use std::fs::File;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::io;
+use cpal::Device;
+use cpal::traits::{DeviceTrait, HostTrait};
+use crate::db_man::add_assistant;
 
 pub fn main() -> iced::Result {
     iced::application(Chat::title, Chat::update, Chat::view)
@@ -36,12 +39,18 @@ struct Chat {
     user: Option<String>,
     user_text: String,
     bot: Vec<ChatCompletionMessage>,
+    current_bot_name: String,
+    available_bots: Vec<String>,
+    adding_bot: bool,
+    bot_text: String,
     content: String,
     logs: Vec<String>,
     settings: Settings,
     side_bar: bool,
     recording_time: u64,
     recording: (bool, IcedDuration),
+    current_input_device: String,
+    input_devices: (Vec<Device>, Vec<String>),
 }
 struct Settings {
     theme: Theme,
@@ -61,7 +70,11 @@ enum Message {
     VoiceChanged(Voices),
     TextSizeChanged(Pixels),
     TextFontChanged(Fonts),
-    BotResponse(String),
+    BotResponse(Vec<ChatCompletionMessage>),
+    BotChanged(String),
+    BotAdded,
+    AssistantChanged(String),
+    AssistantAdded,
     BotVoice,
     RecordingTimeChanged(u64),
     StartMic,
@@ -69,6 +82,7 @@ enum Message {
     SideBarChanged,
     SettingsSaved,
     IntroButton(String),
+    InputDeviceChanged(String),
 }
 impl Default for Chat {
     fn default() -> Self {
@@ -76,6 +90,10 @@ impl Default for Chat {
             user: None,
             user_text: "".to_string(),
             bot: Vec::new(),
+            current_bot_name: "Assistant".to_string(),
+            available_bots: vec![],
+            adding_bot: false,
+            bot_text: "".to_string(),
             content: "".to_string(),
             logs: vec![],
             settings: if Path::new("settings.toml").exists() {
@@ -92,6 +110,8 @@ impl Default for Chat {
             side_bar: true,
             recording_time: 10,
             recording: (false, IcedDuration::from_secs(10)),
+            current_input_device: "Default".to_string(),
+            input_devices: get_input_devices(),
         }
     }
 }
@@ -109,22 +129,30 @@ impl Chat {
 
         let recording_pop_up: Container<'_, Message> = self.recording_popup();
 
+        let assistant_pop_up: Container<'_, Message> = self.assistant_popup();
+
         let area: Row<'_, Message> = Row::new()
                 .push(side_bar)
                 .push(main_area)
                 .padding(20);
 
-        match self.recording.0 {
-            true => {
-                recording_pop_up.into()
-            }
+        //this is getting unwieldy, consider refactoring asp
+        match self.adding_bot {
+            true => assistant_pop_up.into(),
             false => {
-                match self.user {
-                    None => {
-                        center_pop_up.into()
+                match self.recording.0 {
+                    true => {
+                        recording_pop_up.into()
                     }
-                    Some(_) => {
-                        area.into()
+                    false => {
+                        match self.user {
+                            None => {
+                                center_pop_up.into()
+                            }
+                            Some(_) => {
+                                area.into()
+                            }
+                        }
                     }
                 }
             }
@@ -142,10 +170,11 @@ impl Chat {
                     let user_text: String = self.user_text.clone();
                     let content: String = self.content.clone();
                     let bot: Vec<ChatCompletionMessage> = self.bot.clone();
+                    let assistant: String = self.current_bot_name.clone();
                     self.content.clear();
 
                     return Task::perform(async move {
-                        Self::fetch_bot_response(bot, content, user_text)
+                        Self::fetch_bot_response(bot, content, user_text, assistant)
                     }, |response| {
                         Message::BotResponse(response)
                     });
@@ -159,8 +188,11 @@ impl Chat {
             }
             Message::UserAdded => {
                 self.user = Some(self.user_text.clone());
-                self.bot = create_bot(&self.user_text);
+                let holding_user: String = self.user.clone().unwrap();
+                self.available_bots = db_man::get_assistants(&holding_user);
+                self.current_bot_name = String::from("Assistant");
                 self.logs.push(format!("Welcome to the Chatbot Experience, {}! Say Hi to Your AI Assistant\n (Notice: AI Voices Are Generated and Not Real Humans)", &self.user_text));
+                self.bot = create_bot(&self.user_text, &self.current_bot_name);
                 Task::none()
             }
             Message::UserLogOut => {
@@ -180,12 +212,17 @@ impl Chat {
             }
             Message::BotResponse(response) => {
                 self.recording = (false, IcedDuration::from_secs(10));
-                let print_line: String = response.to_string()[15..].parse().unwrap();
-                self.logs.push(format!("Assistant: {}\n", print_line));
+                self.bot = response.clone();
+                let mut print_line: String = response.last().unwrap().content.clone().unwrap();
+                let user_answer: String = print_line
+                    .split_off(print_line.find("Reply to User: ")
+                        .unwrap())[15..].parse().unwrap();
+
+                self.logs.push(format!("{}: {}\n", self.current_bot_name , user_answer));
                 let voice: Voices = self.settings.voice.clone();
                 self.content.clear();
                 Task::perform(async move {
-                    Self::play_bot_voice(print_line, voice)
+                    Self::play_bot_voice(user_answer, voice)
                 }, |()| {
                     Message::BotVoice
                 })
@@ -229,15 +266,20 @@ impl Chat {
                 })
             }
             Message::Tick => {
-                get_audio_input(self.recording_time).expect("Could not find usable mic or sample rate issue");
+                if self.current_input_device == *"Default" {
+                    get_default_audio_input(self.recording_time).expect("Could not find usable mic or sample rate issue")
+                } else {
+                    get_audio_input(self.recording_time, self.get_self_recording_device()).expect("Could not find usable mic or sample rate issue")
+                }
                 let response = transcribe(PathBuf::from("output.wav"));
                 if Path::new("output.wav").exists() {
                     self.logs.push(format!("{}: {}\n", self.user.clone().unwrap(), response));
                     let user_text: String = self.user_text.clone();
                     let bot: Vec<ChatCompletionMessage> = self.bot.clone();
+                    let assistant: String = self.current_bot_name.clone();
                     self.content.clear();
                     return Task::perform(async move {
-                        Self::fetch_bot_response(bot, response, user_text)
+                        Self::fetch_bot_response(bot, response, user_text, assistant)
                     }, |response| {
                         Message::BotResponse(response)
                     });
@@ -253,18 +295,48 @@ impl Chat {
                 let user_text: String = self.user_text.clone();
                 let content: String = topic.clone();
                 let bot: Vec<ChatCompletionMessage> = self.bot.clone();
+                let assistant: String = self.current_bot_name.clone();
 
                 Task::perform(async move {
-                    Self::fetch_bot_response(bot, content, user_text)
+                    Self::fetch_bot_response(bot, content, user_text, assistant)
                 }, |response| {
                     Message::BotResponse(response)
                 })
             }
+            Message::InputDeviceChanged(device_name) => {
+                self.current_input_device = device_name;
+                Task::none()
+            }
+            Message::BotChanged(choice) => {
+                self.current_bot_name = choice;
+                self.bot = create_bot(&self.user_text, &self.current_bot_name);
+                self.logs.clear();
+                self.logs.push(format!("Welcome to the Chatbot Experience, {}! Say Hi to Your AI Assistant\n (Notice: AI Voices Are Generated and Not Real Humans)", &self.user_text));
+                Task::none()
+            }
+            Message::BotAdded => {
+                self.adding_bot = true;
+                Task::none()
+            }
+            Message::AssistantChanged(value) => {
+                self.bot_text = value;
+                Task::none()
+            }
+            Message::AssistantAdded => {
+                self.available_bots.push(self.bot_text.clone());
+                add_assistant(&self.user.clone().unwrap(), &self.bot_text);
+                self.bot = create_bot(&self.user_text, &self.bot_text);
+                self.current_bot_name = self.bot_text.clone();
+                self.logs.clear();
+                self.logs.push(format!("Welcome to the Chatbot Experience, {}! Say Hi to Your AI Assistant\n (Notice: AI Voices Are Generated and Not Real Humans)", &self.user_text));
+                self.adding_bot = false;
+                Task::none()
+            }
         }
     }
     #[tokio::main]
-    async fn fetch_bot_response(mut bot: Vec<ChatCompletionMessage>, content: String, user_text: String) -> String {
-        get_bot_response(&mut bot, content.clone(), &user_text).await
+    async fn fetch_bot_response(mut bot: Vec<ChatCompletionMessage>, content: String, user_text: String, assistant: String) -> Vec<ChatCompletionMessage> {
+        get_bot_response(&mut bot, content.clone(), &user_text, assistant).await
     }
     #[tokio::main]
     async fn play_bot_voice(input_text: String, voice: Voices) {
@@ -279,7 +351,7 @@ impl Chat {
     }
     fn side_bar(&self) -> Container<'_, Message> {
         let icon: Image = Image::new("icon.png");
-
+        let default_padding: u16 = 5;
         let button_theme = move |theme: &Theme, _status| {
             let palette = theme.extended_palette();
             let background: Pair = palette.background.base;
@@ -301,60 +373,83 @@ impl Chat {
             )
             .on_press(Message::SideBarChanged)
             .padding(10)
-            .style(button_theme.clone());
+            .style(button_theme);
 
         let time_list: Column<'_, Message> = Column::new()
             .push(text(format!("Choose Recording Time: {}", self.recording_time)))
             .push(Slider::new(5..=30, self.recording_time as u16, |value| Message::RecordingTimeChanged(value as u64))
                 .step(5u16)
             )
-            .padding(20);
+            .padding(default_padding);
+
+        let assistant_list: Column<'_, Message> = Column::new()
+            .push(text("Choose Available Assistant"))
+            .push(pick_list(self.available_bots.clone(), Some(&self.current_bot_name), Message::BotChanged))
+            .width(Fill)
+            .padding(default_padding);
+
+        let new_assistant_button: Row<'_, Message> = Row::new()
+            .push(horizontal_space())
+            .push(
+                button(text("Add assistant"))
+                    .on_press(Message::BotAdded)
+                    .padding(default_padding)
+                    .style(button_theme),
+            )
+            .push(horizontal_space())
+            .padding(default_padding);
+
+        let device_list: Column<'_, Message> = Column::new()
+            .push(text("Choose Available Input Device"))
+            .push(pick_list(self.input_devices.1.clone(), Some(&self.current_input_device), Message::InputDeviceChanged))
+            .width(Fill)
+            .padding(default_padding);
 
         let theme_list: Column<'_, Message> = Column::new()
             .push(text("Choose Theme"))
             .push(pick_list(Theme::ALL, Some(&self.settings.theme), Message::ThemeChanged)
-                .width(Fill))
-            .padding(20);
+            .width(Fill))
+            .padding(default_padding);
 
         let voice_list: Column<'_, Message> = Column::new()
             .push(text("Choose a Voice"))
             .push(pick_list(Voices::ALL, Some(&self.settings.voice), Message::VoiceChanged))
             .width(Fill)
-            .padding(20);
+            .padding(default_padding);
 
         let text_size_slider: Column<'_, Message> = Column::new()
             .push(text(format!("Set Font Size: {}", self.settings.text_size.0)))
             .push(Slider::new(8..=32, self.settings.text_size.0 as u16, |value| Message::TextSizeChanged(Pixels(value as f32 ))))
             .width(Fill)
-            .padding(20);
+            .padding(default_padding);
 
         let fonts_list: Column<'_, Message> = Column::new()
             .push(text("Set Font Type:"))
             .push(pick_list(Fonts::ALL, Some(&self.settings.text_font), Message::TextFontChanged))
             .width(Fill)
-            .padding(20);
+            .padding(default_padding);
 
         let settings_save_button: Row<'_, Message> = Row::new()
             .push(horizontal_space())
             .push(
                 button(text("Save Settings"))
                 .on_press(Message::SettingsSaved)
-                .padding(10)
-                .style(button_theme.clone()),
+                .padding(default_padding)
+                .style(button_theme),
             )
             .push(horizontal_space())
-            .padding(10);
+            .padding(default_padding);
 
         let logout_button: Row<'_, Message> = Row::new()
             .push(horizontal_space())
             .push(
                 button(text("log out"))
                 .on_press(Message::UserLogOut)
-                .padding(10)
-                .style(button_theme.clone()),
+                .padding(default_padding)
+                .style(button_theme),
             )
             .push(horizontal_space())
-            .padding(10);
+            .padding(default_padding);
 
         let side_bar: Container<'_, Message> = match self.side_bar {
             true => {
@@ -374,15 +469,23 @@ impl Chat {
             false => {
                 container(
                     Column::new()
-                        .push(icon)
-                        .push(theme_list)
-                        .push(voice_list)
-                        .push(text_size_slider)
-                        .push(time_list)
-                        .push(fonts_list)
-                        .push(settings_save_button)
-                        .push(logout_button)
-                        .push(text(self.recording.1.as_secs().to_string()))
+                        .push(
+                            scrollable(
+                                Column::new()
+                                    .push(icon)
+                                    .push(theme_list)
+                                    .push(voice_list)
+                                    .push(text_size_slider)
+                                    .push(time_list)
+                                    .push(assistant_list)
+                                    .push(new_assistant_button)
+                                    .push(device_list)
+                                    .push(fonts_list)
+                                    .push(settings_save_button)
+                                    .push(logout_button)
+                                // .push(text(self.recording.1.as_secs().to_string()))
+                            )
+                        )
                         .push(
                             Column::new()
                                 .push(vertical_space())
@@ -437,13 +540,38 @@ impl Chat {
             )));
 
         let intro_buttons: Column<'_, Message> = Column::new()
-            .push(Button::new("Show me a new Recipe")
+            .push(Button::new(text("Show me a new Recipe")
+                .size(Pixels::from(self.settings.text_size.0))
+                    .font(Font {
+                        family: self.settings.text_family,
+                        weight: Default::default(),
+                        stretch: Default::default(),
+                        style: Default::default(),
+                    })
+            )
                 .on_press(Message::IntroButton(String::from("Show me a new Recipe")))
                 .padding(5))
-            .push(Button::new("Give me a fun fact")
+
+            .push(Button::new(text("Give me a fun fact")
+                .size(Pixels::from(self.settings.text_size.0))
+                    .font(Font {
+                        family: self.settings.text_family,
+                        weight: Default::default(),
+                        stretch: Default::default(),
+                        style: Default::default(),
+                    })
+            )
                 .on_press(Message::IntroButton(String::from("Give me a fun fact")))
                 .padding(5))
-            .push(Button::new("Tell me a joke")
+            .push(Button::new(text("Tell me a joke")
+                .size(Pixels::from(self.settings.text_size.0))
+                    .font(Font {
+                        family: self.settings.text_family,
+                        weight: Default::default(),
+                        stretch: Default::default(),
+                        style: Default::default(),
+                    })
+            )
                 .on_press(Message::IntroButton(String::from("Tell me a joke")))
                 .padding(5));
 
@@ -575,11 +703,43 @@ impl Chat {
 
         container(self.horizontal_height_pad(recording_row.into(), 3))
     }
+    fn assistant_popup(&self) -> Container<'_, Message> {
+
+        let signpost_container: Container<'_, Message> = container(text("Please enter your assistants new name"))
+            .center_x(Fill)
+            .padding(10);
+
+        let blank_space: Row<'_, Message> = Row::new()
+            .push(horizontal_space().width(FillPortion(1)))
+            .push(horizontal_space().width(FillPortion(1))
+            );
+
+        let assistant_input: TextInput<'_, Message> = text_input("Enter new name here", &self.bot_text)
+            .on_input(Message::AssistantChanged)
+            .on_submit(Message::AssistantAdded)
+            .align_x(Alignment::Center)
+            .padding(10);
+
+        let assistant_container: Container<'_, Message> = container(Column::new()
+            .push(signpost_container)
+            .push(blank_space)
+            .push(assistant_input))
+            .align_y(Center)
+            .center_y(FillPortion(1))
+            .center_x(FillPortion(2))
+            .style(move |theme: &Theme| {
+                self.button_theme(theme)
+            });
+
+        let recording_row: Row<'_, Message> = self.vertical_width_pad(assistant_container.into(), 1);
+
+        container(self.horizontal_height_pad(recording_row.into(), 3))
+    }
     fn button_theme(&self, theme: &Theme) -> Style {
             let palette = theme.extended_palette();
             let background: Pair = palette.background.strong;
             Style {
-                text_color: Some(background.text.into()),
+                text_color: Some(background.text),
                 background: Some(background.color.into()),
                 border: border::rounded(border::radius(20)),
                 shadow: Default::default(),
@@ -598,6 +758,16 @@ impl Chat {
             .push(container)
             .push(vertical_space().height(FillPortion(fill)))
     }
+    //this is really inefficient
+    fn get_self_recording_device(&self) -> Device {
+        let mut output: Device = cpal::default_host().default_input_device().unwrap();
+        for device in self.input_devices.0.clone() { //dont want to clone this fix later
+            if device.name().unwrap()[16..] == self.current_input_device {
+                output = device;
+            }
+        }
+        output
+    }
 }
 //iced widget helpers
 fn border_background(pos: i32, text_input: Text<Theme, Renderer>) -> Container<Message> {
@@ -609,7 +779,6 @@ fn border_background(pos: i32, text_input: Text<Theme, Renderer>) -> Container<M
                 .center_x(800)
                 .width(Fill)
                 .style(container::bordered_box)
-                .into()
         }
         _ => {
             let bubble = container(text_input)
@@ -641,7 +810,6 @@ fn border_background(pos: i32, text_input: Text<Theme, Renderer>) -> Container<M
         }
     }
 }
-
 //temp space for fonts
 #[derive(Debug, Clone, PartialEq)]
 enum Fonts {
@@ -677,7 +845,6 @@ impl Fonts {
     //         Monospace => Font::with_name("Monospace"),
     //     }
     // }
-
     pub fn convert_to_family(&self) -> Family {
 
         match self {
@@ -689,7 +856,6 @@ impl Fonts {
         }
     }
 }
-
 // let load_data = match self {
 //     Montserrat => read("fonts/Montserrat/static/Montserrat-Medium.ttf"),
 //     NotoSans => read("fonts/Noto_Sans/static/NotoSans-Medium.ttf"),

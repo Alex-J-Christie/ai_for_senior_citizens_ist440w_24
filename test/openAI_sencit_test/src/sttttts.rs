@@ -6,7 +6,7 @@ use cpal::{Device, FromSample, Host, Sample, Stream, StreamError, SupportedStrea
 use curl::easy::{Easy, List, Transfer};
 use dotenvy::dotenv;
 use hound::{SampleFormat, WavSpec, WavWriter};
-use mp3_duration;
+
 use rodio::{Decoder, OutputStream, OutputStreamHandle, Source};
 use serde_json::{json, Value};
 
@@ -63,8 +63,7 @@ pub async fn play_audio() {
 
 fn get_file_duration() -> Duration {
     let file: File = File::open("output.mp3").unwrap();
-    let duration = mp3_duration::from_file(&file).unwrap();
-    duration
+    mp3_duration::from_file(&file).unwrap()
 }
 
 pub async fn generate_audio(audio_in: String, voice: Voices) {
@@ -88,7 +87,7 @@ pub async fn generate_audio(audio_in: String, voice: Voices) {
             headers.append("Content-Type: application/json").unwrap();
             easy.http_headers(headers).unwrap();
 
-            println!("{}", voice.to_string());
+            // println!("{}", voice.to_string());
             let json_payload: Value = json!({
                 "model": "tts-1",
                 "input": audio_in,
@@ -119,13 +118,12 @@ pub async fn generate_audio(audio_in: String, voice: Voices) {
             }
         }
     }
-
 }
 
 pub fn transcribe(audio_in: PathBuf) -> String {
     dotenv().unwrap();
     let api_key: String = env::var("OPENAI_KEY").unwrap();
-    let test_file: PathBuf = PathBuf::from(audio_in);
+    let test_file: PathBuf = audio_in;
     let mut easy = Easy::new();
 
     easy.url("https://api.openai.com/v1/audio/transcriptions").unwrap();
@@ -163,26 +161,59 @@ pub fn transcribe(audio_in: PathBuf) -> String {
     out[1..].parse().unwrap()
 }
 
-//i am dead - low level audio libraries killed me
-//its 1 am im just gonna look for a different library tomorrow
-//
-//haha, never mind
-//need to clean this up because right now any bug threatens me with an hour-long game of hide and seek
+/*
+i am dead - low level audio libraries killed me
+its 1 am im just gonna look for a different library tomorrow
 
-pub fn get_audio_input(time: u64) -> Result<(), Error>{
+haha, never mind
+need to clean this up because right now any bug threatens me with an hour-long game of hide and seek
+*/
+
+pub fn get_input_devices() -> (Vec<Device>, Vec<String>){
+    let host: Host = cpal::default_host();
+    let devices = host.devices().unwrap();
+    let mut matched_devices: Vec<Device> = Vec::new();
+    let mut matched_names: Vec<String> = Vec::new();
+    matched_names.push(String::from("Default"));
+    for device in devices {
+        match device.name() {
+            Ok(name) => {
+                if name.contains("sysdefault:CARD=") && !name.contains("Generic_1") {
+                    matched_devices.push(device.clone());
+                    matched_names.push(device.name().unwrap()[16..].parse().unwrap());
+                }
+            }
+            Err(e) => println!("get_input_devices error {}", e),
+        }
+    }
+    (matched_devices, matched_names)
+}
+type WavWriterHandle = Arc<Mutex<Option<WavWriter<BufWriter<File>>>>>;
+
+pub fn get_default_audio_input(time: u64) -> Result<(), Error>{
     let host: Host = cpal::default_host();
     let device: Device = host.default_input_device().expect("failed to get default output device");
-    let config: SupportedStreamConfig = device.default_input_config().unwrap();
+    get_audio_input(time, device)
+}
+pub fn get_audio_input(time: u64, device: Device) -> Result<(), Error>{
+    println!("Device name: {}", device.name().unwrap());
+    let config: SupportedStreamConfig = device.default_input_config().unwrap_or_else(|e| {
+        println!("Failed to get preferred audio config at get_audio_input: {}", e);
+        println!("using default audio config instead");
+        let host: Host = cpal::default_host();
+        let default_device: Device = host.default_input_device().expect("failed to get default output device");
+        default_device.default_input_config().unwrap()
+    });
     println!("Default Input Config: {:?}", config);
 
     let path: String = String::from("output.wav");
     let spec: WavSpec = wav_spec_from_config(&config);
     let writer: WavWriter<BufWriter<File>> = WavWriter::create(path, spec).unwrap();
-    let writer: Arc<Mutex<Option<WavWriter<BufWriter<File>>>>> = Arc::new(Mutex::new(Some(writer)));
+    let writer: WavWriterHandle = Arc::new(Mutex::new(Some(writer)));
 
     println!("Begin recording...");
 
-    let writer_2: Arc<Mutex<Option<WavWriter<BufWriter<File>>>>> = writer.clone();
+    let writer_2: WavWriterHandle = writer.clone();
 
     let err_fn: fn(StreamError) = move |err: StreamError| {
         eprintln!("an error occurred on stream: {}", err);
@@ -224,10 +255,11 @@ pub fn get_audio_input(time: u64) -> Result<(), Error>{
     stream.play().unwrap();
 
     std::thread::sleep(Duration::from_secs(time));
-    Ok(stream_stop_drop(stream, writer).expect("Failed to Handle Thread LOC"))
+    stream_stop_drop(stream, writer).expect("Failed to Handle Thread LOC");
+    Ok(())
 }
 
-fn stream_stop_drop(stream: Stream, writer: Arc<Mutex<Option<WavWriter<BufWriter<File>>>>>) -> Result<(), Error> {
+fn stream_stop_drop(stream: Stream, writer: WavWriterHandle) -> Result<(), Error> {
     drop(stream);
     writer
         .lock().unwrap()
@@ -237,7 +269,7 @@ fn stream_stop_drop(stream: Stream, writer: Arc<Mutex<Option<WavWriter<BufWriter
     Ok(())
 }
 
-type WavWriterHandle = Arc<Mutex<Option<WavWriter<BufWriter<File>>>>>;
+
 fn write_input_data<T, U>(input: &[T], writer: &WavWriterHandle)
 where
     T: Sample,

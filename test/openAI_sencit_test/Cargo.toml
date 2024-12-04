@@ -1,6 +1,6 @@
 [package]
 name = "openAI_sencit_test"
-version = "0.1.0"
+version = "1.1.0"
 edition = "2021"
 
 [dependencies]
@@ -20,3 +20,4 @@ hound = "3.5.1"
 anyhow = "1.0.89"
 serde = { version = "1.0.210", features = ["derive"] }
 toml = "0.8.19"
+pv_recorder = "1.2.3"
